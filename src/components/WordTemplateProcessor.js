@@ -180,6 +180,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       let newXmlContent = beforeSection + allStudentSections + afterSection;
 
       // --- 4. Zusätzliche Anpassungen am XML ---
+
       // 1. Alle existierenden XML-Deklarationen und BOM-Zeichen entfernen
       newXmlContent = newXmlContent
         .replace(/<\?xml.*?\?>\n?/g, '') // Alle XML-Header entfernen
@@ -188,8 +189,8 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
 
       // 2. XML-Strukturanpassungen
       newXmlContent = newXmlContent
-        .replace(/<w:t([^>]*)>([^<]*)/g, '<w:t$1>$2</w:t>') // Fehlende </w:t>-Tags schließen
-        .replace(/\s+xmlns:w="[^"]*"/g, '')                  // Alle xmlns:w-Deklarationen entfernen
+        .replace(/<w:t([^>]*)>([^<]*)(?!<\/w:t>)/g, '<w:t$1>$2</w:t>') // Fehlende </w:t>-Tags schließen, falls nicht vorhanden
+        .replace(/\s+xmlns:w="[^"]*"/g, '')                             // Alle xmlns:w-Deklarationen entfernen
         .replace(/<w:document/, '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"');
 
       // 3. Neue XML-Deklaration AM ABSOLUTEN ANFANG einfügen
