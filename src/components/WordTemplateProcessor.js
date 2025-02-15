@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import PizZip from 'pizzip';
+import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
+import { AppContext } from '../context/AppContext';
 
-const WordTemplateProcessor = ({ student, dashboardData }) => {
+const WordTemplateProcessor = ({ student }) => {
   const [processing, setProcessing] = useState(false);
+  const { dashboardData } = useContext(AppContext);
 
-  // Wählt das richtige DOCX-Template basierend auf der Zeugnisart
   const getTemplateFileName = () => {
     const art = dashboardData.zeugnisart || '';
     if (art === 'Zwischenzeugnis') {
@@ -13,7 +15,6 @@ const WordTemplateProcessor = ({ student, dashboardData }) => {
     } else if (art === 'Abschlusszeugnis') {
       return `${process.env.PUBLIC_URL}/template_abschluss.docx`;
     }
-    // Standard: Jahreszeugnis
     return `${process.env.PUBLIC_URL}/template_jahr.docx`;
   };
 
@@ -22,79 +23,43 @@ const WordTemplateProcessor = ({ student, dashboardData }) => {
     try {
       const templateFile = getTemplateFileName();
       const response = await fetch(templateFile);
-      if (!response.ok) {
-        throw new Error(`Template file not found: ${templateFile}`);
-      }
+      if (!response.ok) throw new Error('Template nicht gefunden');
       const arrayBuffer = await response.arrayBuffer();
-      const zip = new PizZip(arrayBuffer);
 
-      // Lese den Inhalt der document.xml
-      let documentXml = zip.file("word/document.xml").asText();
+      const zip = new PizZip(arrayBuffer);
+      const doc = new Docxtemplater();
+      doc.loadZip(zip);
 
       // Zusammenführen von Excel-Daten (student) und Dashboard-Daten
       const data = {
-        // Excel-Daten
-        Zeugnisart: student.Zeugnisart || '',
-        KL: student.KL || '',
-        Vorname: student.Vorname || '',
-        Nachname: student.Nachname || '',
-        GDat: student.GDat || '',
-        GOrt: student.GOrt || '',
-        F1_ZZ: student.F1_ZZ || '',
-        F2_ZZ: student.F2_ZZ || '',
-        F3_ZZ: student.F3_ZZ || '',
-        F4_ZZ: student.F4_ZZ || '',
-        F5_ZZ: student.F5_ZZ || '',
-        F6_ZZ: student.F6_ZZ || '',
-        F7_ZZ: student.F7_ZZ || '',
-        F8_ZZ: student.F8_ZZ || '',
-        F9_ZZ: student.F9_ZZ || '',
-        BU_ZZ: student.BU_ZZ || '',
-        BU2_ZZ: student.BU2_ZZ || '',
-        F1: student.F1 || '',
-        F2: student.F2 || '',
-        F3: student.F3 || '',
-        F4: student.F4 || '',
-        F5: student.F5 || '',
-        F6: student.F6 || '',
-        F7: student.F7 || '',
-        F8: student.F8 || '',
-        F9: student.F9 || '',
-        // Dashboard-Daten
-        Schulleitung: dashboardData.schulleitung || '',
-        Klassenleitung: dashboardData.klassenleitung || '',
-        Sl_Titel: dashboardData.sl_titel || '',
-        Zeugnisdatum: dashboardData.datum || '',
-        SJ: dashboardData.schuljahr || ''
+        ...student,
+        ...dashboardData,
+        Zeugnisdatum: dashboardData.datum,
+        Sl_Titel: dashboardData.sl_titel,
+        Kl_Titel: dashboardData.kl_titel
       };
 
-      // Ersetze alle Platzhalter (unterstützt sowohl {{...}} als auch <<...>>)
-      for (const [key, value] of Object.entries(data)) {
-        const regex = new RegExp(`(?:{{|<<)${key}(?:}}|>>)`, 'g');
-        documentXml = documentXml.replace(regex, value);
-      }
+      doc.setData(data);
+      doc.render();
 
-      // Überschreibe die document.xml im ZIP-Archiv
-      zip.file("word/document.xml", documentXml);
-
-      // Generiere die finale DOCX-Datei als Blob
-      const out = zip.generate({
-        type: "blob",
-        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      const out = doc.getZip().generate({
+        type: 'blob',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       });
 
-      // Starte den Download
-      saveAs(out, "zeugnis.docx");
+      saveAs(out, `zeugnis_${student.Nachname}.docx`);
     } catch (error) {
-      console.error("Fehler beim Generieren der Word-Datei:", error);
+      console.error('Fehler:', error);
+      alert('Fehler bei der Generierung!');
+    } finally {
+      setProcessing(false);
     }
-    setProcessing(false);
   };
 
   return (
     <div>
       <button onClick={generateDocx} disabled={processing}>
-        {processing ? "Erstelle Word-Datei..." : "Word-Datei generieren"}
+        {processing ? "Generiere..." : "Word-Dokument erstellen"}
       </button>
     </div>
   );
