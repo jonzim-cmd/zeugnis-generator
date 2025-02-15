@@ -4,6 +4,18 @@ import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
 import { AppContext } from '../context/AppContext';
 
+// Helper: Escape regex-special characters
+const escapeRegExp = (string) => {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+// Diese Funktion ersetzt ALLE <<...>>-Tags im Inhalt global durch {{...}}.
+const sanitizeXmlContent = (content) => {
+  return content.replace(/<<([^<>]+)>>/g, (match, p1) => {
+    return `{{${p1.trim()}}}`;
+  });
+};
+
 const WordTemplateProcessor = ({ student }) => {
   const [processing, setProcessing] = useState(false);
   const { dashboardData } = useContext(AppContext);
@@ -18,28 +30,6 @@ const WordTemplateProcessor = ({ student }) => {
     return `${process.env.PUBLIC_URL}/template_jahr.docx`;
   };
 
-  const sanitizeXmlContent = (content) => {
-    // First, collect all unique placeholders
-    const placeholders = new Set();
-    const regex = /<<([^<>]+)>>/g;
-    let match;
-    
-    while ((match = regex.exec(content)) !== null) {
-      placeholders.add(match[0]);
-    }
-
-    // Then replace each placeholder exactly once
-    let sanitizedContent = content;
-    placeholders.forEach(placeholder => {
-      const innerContent = placeholder.slice(2, -2).trim();
-      const replacement = `{{${innerContent}}}`;
-      // Replace only the first occurrence to avoid duplicate replacements
-      sanitizedContent = sanitizedContent.replace(placeholder, replacement);
-    });
-
-    return sanitizedContent;
-  };
-
   const generateDocx = async () => {
     setProcessing(true);
     try {
@@ -52,24 +42,24 @@ const WordTemplateProcessor = ({ student }) => {
       const arrayBuffer = await response.arrayBuffer();
       const zip = new PizZip(arrayBuffer);
 
-      // Process main document
+      // Bearbeite ausschließlich das Hauptdokument (word/document.xml)
       const documentXmlPath = 'word/document.xml';
       if (!zip.file(documentXmlPath)) {
         throw new Error('Dokumentstruktur ungültig: word/document.xml nicht gefunden');
       }
-
       const xmlContent = zip.file(documentXmlPath).asText();
       const sanitizedContent = sanitizeXmlContent(xmlContent);
       zip.file(documentXmlPath, sanitizedContent);
 
-      // Configure and render document
+      // Konfiguriere und lade Docxtemplater
       const doc = new Docxtemplater();
       doc.loadZip(zip);
       
+      // nullGetter sorgt dafür, dass fehlende Werte nicht zu Fehlern führen
+      // und der parser entfernt ggf. überflüssige Klammern.
       doc.setOptions({
         nullGetter: () => '',
         parser: (tag) => {
-          // Remove any remaining << >> or extra spaces
           tag = tag.replace(/[<>]/g, '').trim();
           return {
             get: (scope) => scope[tag] || ''
@@ -83,7 +73,7 @@ const WordTemplateProcessor = ({ student }) => {
         Zeugnisdatum: dashboardData.datum
       };
 
-      // Pre-process data to ensure all values are strings
+      // Vorverarbeiten: Alle Werte als Strings
       const processedData = Object.entries(data).reduce((acc, [key, value]) => {
         acc[key] = value?.toString() || '';
         return acc;
