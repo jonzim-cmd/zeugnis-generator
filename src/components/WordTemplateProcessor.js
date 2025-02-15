@@ -180,16 +180,19 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       let newXmlContent = beforeSection + allStudentSections + afterSection;
 
       // --- 4. Zusätzliche Anpassungen am XML ---
-      // Entferne eventuell vorhandene BOM-Zeichen
-      newXmlContent = newXmlContent.replace(/^\uFEFF/, '');
-      // Stelle sicher, dass alle <w:t>-Tags korrekt geschlossen sind
+      // 1. Entferne BOM und alle existierenden XML-Deklarationen
+      newXmlContent = newXmlContent
+        .replace(/^\uFEFF/, '')
+        .replace(/<\?xml.*?\?>\n?/g, '')
+        .replace(/^\s+/, '');
+      // 2. Neue XML-Deklaration am absoluten Anfang einfügen
+      newXmlContent = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + newXmlContent;
+      // 3. Stelle sicher, dass alle <w:t>-Tags korrekt geschlossen sind
       newXmlContent = newXmlContent.replace(/<w:t([^>]*)>([^<]*)/g, '<w:t$1>$2</w:t>');
-      // Entferne alle vorhandenen xmlns:w-Deklarationen und füge sie einmalig im Root-Tag ein
+      // 4. Entferne alle vorhandenen xmlns:w-Deklarationen und füge sie einmalig im Root-Tag ein
       newXmlContent = newXmlContent
         .replace(/\s+xmlns:w="[^"]*"/g, '')
         .replace(/<w:document/, '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"');
-      // Füge einen XML-Header hinzu
-      newXmlContent = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + newXmlContent;
 
       // --- 5. XML-Validierung ---
       const parser = new DOMParser();
