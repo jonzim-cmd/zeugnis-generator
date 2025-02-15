@@ -35,8 +35,8 @@ const WordTemplateProcessor = ({ student }) => {
       const documentXmlPath = 'word/document.xml';
       if (zip.file(documentXmlPath)) {
         let xmlContent = zip.file(documentXmlPath).asText();
-        // Ersetze nur <<...>>-Platzhalter, die keine { oder } enthalten, durch {{...}}
-        xmlContent = xmlContent.replace(/<<([^{}]+)>>/g, (match, p1) => `{{${p1.trim()}}}`);
+        // Ersetze nur <<...>>-Platzhalter, die nicht bereits Teil von {{...}} sind.
+        xmlContent = xmlContent.replace(/(?<!\{)<<([^{}]+)>>/g, (match, p1) => `{{${p1.trim()}}}`);
         zip.file(documentXmlPath, xmlContent);
       } else {
         console.warn('word/document.xml nicht gefunden');
