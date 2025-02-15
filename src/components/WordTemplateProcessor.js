@@ -84,7 +84,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       const startBookmarkEndRegex = /<w:bookmarkEnd[^>]*w:id\s*=\s*"(\d+)"[^>]*>/;
       const endBookmarkStartRegex = /<w:bookmarkStart[^>]*w:name="STUDENT_SECTION_END"[^>]*>/;
 
-      // Finde das bookmarkStart-Tag für STUDENT_SECTION_START
       const startBookmarkStartMatch = xmlContent.match(startBookmarkStartRegex);
       if (!startBookmarkStartMatch) {
         throw new Error('Lesezeichen "STUDENT_SECTION_START" nicht gefunden');
@@ -92,7 +91,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       const startBookmarkStartIndex = xmlContent.indexOf(startBookmarkStartMatch[0]);
       const afterStartBookmarkStartIndex = startBookmarkStartIndex + startBookmarkStartMatch[0].length;
 
-      // Finde das zugehörige bookmarkEnd-Tag
       const startBookmarkEndSlice = xmlContent.slice(afterStartBookmarkStartIndex);
       const startBookmarkEndMatch = startBookmarkEndSlice.match(startBookmarkEndRegex);
       if (!startBookmarkEndMatch) {
@@ -103,7 +101,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         startBookmarkEndSlice.indexOf(startBookmarkEndMatch[0]) +
         startBookmarkEndMatch[0].length;
 
-      // Finde das bookmarkStart-Tag für STUDENT_SECTION_END
       const endBookmarkStartSlice = xmlContent.slice(startBookmarkEndIndex);
       const endBookmarkStartMatch = endBookmarkStartSlice.match(endBookmarkStartRegex);
       if (!endBookmarkStartMatch) {
@@ -112,13 +109,10 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       const endBookmarkStartIndex =
         startBookmarkEndIndex + endBookmarkStartSlice.indexOf(endBookmarkStartMatch[0]);
 
-      // Extrahiere den Template-Bereich (von nach dem bookmarkEnd bis vor dem bookmarkStart des END-Bookmarks)
       let sectionTemplate = xmlContent.substring(startBookmarkEndIndex, endBookmarkStartIndex)
-        // Entferne alle Bookmark-Tags – Namespaces bleiben erhalten
         .replace(/<w:bookmark(Start|End)[^>]*>/g, '');
 
       // --- 2. Platzhalter-Ersetzung für jeden Schüler ---
-      // Stelle sicher, dass excelData ein Array ist
       if (!Array.isArray(excelData)) {
         excelData = [excelData];
       }
@@ -127,8 +121,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         const student = excelData[i];
         let studentSection = sectionTemplate;
 
-        // Erstelle ein Mapping – alle Werte werden über escapeXml geschützt,
-        // zusätzlich wird auf Null-Bytes geprüft
         const mapping = {
           'placeholdersj': escapeXml(dashboardData.schuljahr || ''),
           'placeholdersl': escapeXml(dashboardData.schulleitung || ''),
@@ -146,7 +138,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           mapping[key] = safeValue;
         });
 
-        // Ersetze zuerst spezifische Platzhalter
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderklasse'), 'g'),
           mapping['placeholderklasse'] || ''
@@ -155,7 +146,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           new RegExp(escapeRegExp('placeholderkl'), 'g'),
           mapping['placeholderkl'] || ''
         );
-        // Alle übrigen Platzhalter ersetzen (längere Schlüssel zuerst, um Überschneidungen zu vermeiden)
         Object.keys(mapping)
           .filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl')
           .sort((a, b) => b.length - a.length)
@@ -164,7 +154,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // Füge einen robusten Seitenumbruch ein (ohne redundante Namespace-Deklaration)
         const pageBreak = `
           <w:p>
             <w:r>
@@ -184,33 +173,24 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       let newXmlContent = beforeSection + allStudentSections + afterSection;
 
       // --- 4. Zusätzliche Anpassungen am XML ---
-      // 1. Entferne alle existierenden XML-Deklarationen und BOM-Zeichen
       newXmlContent = newXmlContent
         .replace(/<\?xml.*?\?>\n?/g, '')
         .replace(/^\uFEFF/, '')
         .trim();
-      // 2. Verbesserte Regex zum Schließen fehlender </w:t>-Tags:
-      //    Zuerst werden korrekt geschlossene <w:t> unverändert gelassen,
-      //    dann fehlende </w:t> ergänzt.
+
       newXmlContent = newXmlContent.replace(
         /<w:t(\b[^>]*)>([^<]*)<\/w:t>/g,
-        (match, attrs, content) => {
-          return `<w:t${attrs}>${content}</w:t>`;
-        }
+        (match, attrs, content) => `<w:t${attrs}>${content}</w:t>`
       ).replace(
         /<w:t(\b[^>]*)>([^<]*)(<\/w:t>)?/g,
-        (match, attrs, content, closingTag) => {
-          return closingTag ? match : `<w:t${attrs}>${content}</w:t>`;
-        }
+        (match, attrs, content, closingTag) => closingTag ? match : `<w:t${attrs}>${content}</w:t>`
       );
-      // 3. Entferne alle xmlns:w-Deklarationen restlos
+
       newXmlContent = newXmlContent.replace(/xmlns:w="[^"]*"/g, '');
-      // 4. Füge den korrekten Namespace im Root-Tag ein
       newXmlContent = newXmlContent.replace(
         /<w:document/,
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
       );
-      // 5. Füge den XML-Header AM ABSOLUTEN ANFANG ein
       newXmlContent = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + newXmlContent;
 
       // --- 5. XML-Validierung ---
@@ -234,16 +214,25 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         type: 'blob',
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         compression: 'DEFLATE',
-        compressionOptions: {
-          level: 9
-        }
+        compressionOptions: { level: 9 }
       });
       saveAs(out, 'zeugnisse_gesamt.docx');
 
-      // Optional: Debug-Ausgabe (z. B. XML-Ausschnitt)
-      // console.log(newXmlContent.substring(0, 1000));
     } catch (error) {
       console.error('Fehler beim Generieren der Word-Datei:', error);
       alert(`Fehler bei der Generierung: ${error.message || 'Unbekannter Fehler'}`);
     } finally {
-      setProcessing(false)
+      setProcessing(false);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={generateDocx} disabled={processing}>
+        {processing ? 'Generiere...' : 'Word-Dokument erstellen'}
+      </button>
+    </div>
+  );
+};
+
+export default WordTemplateProcessor;
