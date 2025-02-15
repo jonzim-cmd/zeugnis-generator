@@ -202,7 +202,8 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
 
       // --- 6. ZIP-Struktur vervollständigen ---
-      originalZip.forEach((relativePath, file) => {
+      Object.keys(originalZip.files).forEach((relativePath) => {
+        const file = originalZip.file(relativePath);
         if (!zip.file(relativePath)) {
           zip.file(relativePath, file.asUint8Array());
         }
