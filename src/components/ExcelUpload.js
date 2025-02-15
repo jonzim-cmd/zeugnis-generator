@@ -29,8 +29,9 @@ const ExcelUpload = () => {
         
         setDashboardData(prev => ({
           ...prev,
-          zeugnisart: zeugnisartMapping[jsonData[0].Zeugnisart] || 'Jahreszeugnis',
-          KL: jsonData[0].KL
+          zeugnisart: zeugnisartMapping[jsonData[0].Zeugnisart] || 'Jahreszeugnis'
+          // WICHTIG: Wir entfernen hier das Setzen von dashboardData.KL,
+          // damit die manuelle Eingabe im Dashboard (dashboardData.klassenleitung) nicht überschrieben wird.
         }));
       }
     };
