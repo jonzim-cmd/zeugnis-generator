@@ -68,7 +68,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
       const arrayBuffer = await response.arrayBuffer();
 
-      // --- ZIP-Struktur: Original-ZIP behalten, um fehlende Dateien später zu kopieren ---
+      // --- ZIP-Struktur: Original-ZIP behalten, um alle Dateien später zu kopieren ---
       const originalZip = new PizZip(arrayBuffer);
       const zip = new PizZip(arrayBuffer);
 
@@ -112,8 +112,9 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       const endBookmarkStartIndex =
         startBookmarkEndIndex + endBookmarkStartSlice.indexOf(endBookmarkStartMatch[0]);
 
-      // Extrahiere den Template-Bereich (zwischen bookmarkEnd von START und bookmarkStart von END)
+      // Extrahiere den Template-Bereich (von nach dem bookmarkEnd bis vor dem bookmarkStart des END-Bookmarks)
       let sectionTemplate = xmlContent.substring(startBookmarkEndIndex, endBookmarkStartIndex)
+        // Entferne alle Bookmark-Tags – Namespaces bleiben erhalten
         .replace(/<w:bookmark(Start|End)[^>]*>/g, '');
 
       // --- 2. Platzhalter-Ersetzung für jeden Schüler ---
@@ -122,13 +123,8 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         const student = excelData[i];
         let studentSection = sectionTemplate;
 
-        // Temporärer Namespace-Alias
-        studentSection = studentSection
-          .replace(/<w:/g, '<ns:')
-          .replace(/<\/w:/g, '</ns:')
-          .replace(/ xmlns:w="[^"]*"/, '');
-
-        // Erstelle ein Mapping mit Dashboard-Daten (escapeXml) 
+        // Erstelle ein Mapping – alle Werte werden über escapeXml geschützt,
+        // zusätzlich wird auf Null-Bytes geprüft
         const mapping = {
           'placeholdersj': escapeXml(dashboardData.schuljahr || ''),
           'placeholdersl': escapeXml(dashboardData.schulleitung || ''),
@@ -138,7 +134,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           'placeholderkl': escapeXml(dashboardData.klassenleitung || '')
         };
 
-        // Mapping um alle Excel-Felder erweitern – zusätzlich Null-Byte-Filter
         Object.entries(student).forEach(([key, value]) => {
           let safeValue = escapeXml(value);
           if (safeValue.includes('\u0000')) {
@@ -147,7 +142,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           mapping[key] = safeValue;
         });
 
-        // Ersetze zuerst spezifische Platzhalter
+        // Zuerst spezifische Platzhalter ersetzen
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderklasse'), 'g'),
           mapping['placeholderklasse'] || ''
@@ -156,7 +151,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           new RegExp(escapeRegExp('placeholderkl'), 'g'),
           mapping['placeholderkl'] || ''
         );
-        // Ersetze alle übrigen Platzhalter (längere Schlüssel zuerst)
+        // Alle übrigen Platzhalter ersetzen (längere Schlüssel zuerst, um Überschneidungen zu vermeiden)
         Object.keys(mapping)
           .filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl')
           .sort((a, b) => b.length - a.length)
@@ -165,20 +160,12 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // Namespace-Alias zurückübersetzen
-        studentSection = studentSection
-          .replace(/<ns:/g, '<w:')
-          .replace(/<\/ns:/g, '</w:');
-
-        // Füge einen robusten Seitenumbruch ein (vollständiger Paragraph)
+        // Füge einen robusten Seitenumbruch ein – mit expliziter Namespace-Deklaration
         const pageBreak = `
-          <w:p>
+          <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
             <w:r>
-              <w:br w:type="page" w:subType="page"/>
+              <w:br w:type="page"/>
             </w:r>
-            <w:pPr>
-              <w:spacing w:after="0" w:line="240" w:lineRule="auto"/>
-            </w:pPr>
           </w:p>
         `;
         if (i < excelData.length - 1) {
@@ -192,17 +179,15 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       const afterSection = xmlContent.substring(endBookmarkStartIndex);
       let newXmlContent = beforeSection + allStudentSections + afterSection;
 
-      // --- Zusätzliche Anpassungen nach dem XML-Zusammenbau ---
+      // --- 4. Zusätzliche Anpassungen am XML ---
       // Entferne eventuell vorhandene BOM-Zeichen
       newXmlContent = newXmlContent.replace(/^\uFEFF/, '');
       // Stelle sicher, dass alle <w:t>-Tags korrekt geschlossen sind
       newXmlContent = newXmlContent.replace(/<w:t([^>]*)>([^<]*)/g, '<w:t$1>$2</w:t>');
-
-      // --- 4. Namespace-Konsistenz sicherstellen ---
-      newXmlContent = newXmlContent.replace(
-        /<w:document/,
-        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
-      );
+      // Entferne alle vorhandenen xmlns:w-Deklarationen und füge sie einmalig im Root-Tag ein
+      newXmlContent = newXmlContent
+        .replace(/xmlns:w="[^"]*"/g, '')
+        .replace(/<w:document/, '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"');
 
       // --- 5. XML-Validierung ---
       const parser = new DOMParser();
@@ -213,7 +198,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
 
       // --- 6. ZIP-Struktur vervollständigen ---
-      // Kopiere alle Dateien aus dem originalen ZIP, die im neuen ZIP fehlen
       originalZip.forEach((relativePath, file) => {
         if (!zip.file(relativePath)) {
           zip.file(relativePath, file.asUint8Array());
