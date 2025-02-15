@@ -6,11 +6,12 @@ export const AppContext = createContext();
 export const AppProvider = ({ children }) => {
   const [excelData, setExcelData] = useState([]);
   const [dashboardData, setDashboardData] = useState({
-    klassenleitung: '',
-    schulleitung: '',
-    schuljahr: '',
-    datum: '',
-    zeugnisart: 'Jahreszeugnis'  // Optionen: "Zwischenzeugnis", "Jahreszeugnis", "Abschlusszeugnis"
+    klassenleitung: '',     // Klassenleitung aus dem Dashboard
+    schulleitung: '',       // Schulleitung aus dem Dashboard
+    schuljahr: '',          // Schuljahr aus dem Dashboard
+    datum: '',              // Datum (falls benötigt)
+    zeugnisart: 'Jahreszeugnis',  // Optionen: "Zwischenzeugnis", "Jahreszeugnis", "Abschlusszeugnis"
+    KL: ''                  // Klasse aus dem Dashboard (wird als "KL" in der WordTemplateProcessor erwartet)
   });
 
   return (
