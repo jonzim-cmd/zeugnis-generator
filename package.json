@@ -19,7 +19,7 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "postbuild": "rm -rf docs && mkdir docs && cp -r build/* docs/",
+    "deploy": "npm run build && git add docs && git commit -m \"Update docs folder\" && git push"
   }
 }
