@@ -9,6 +9,18 @@ const Dashboard = () => {
     setDashboardData({ ...dashboardData, [e.target.name]: e.target.value });
   };
 
+  // Dropdown-Optionen für Funktionsbezeichnungen
+  const funktionsOptions = [
+    'StR',
+    'StRin',
+    'OStR',
+    'OStRin',
+    'StD',
+    'StDin',
+    'OStD',
+    'OStDin'
+  ];
+
   return (
     <div>
       <Typography variant="h6" gutterBottom>
@@ -35,21 +47,35 @@ const Dashboard = () => {
         </Grid>
         <Grid item xs={12} sm={6}>
           <TextField
+            select
             label="Funktionsbezeichnung Schulleitung"
             name="sl_titel"
             value={dashboardData.sl_titel}
             onChange={handleChange}
             fullWidth
-          />
+          >
+            {funktionsOptions.map((option) => (
+              <MenuItem key={option} value={option}>
+                {option}
+              </MenuItem>
+            ))}
+          </TextField>
         </Grid>
         <Grid item xs={12} sm={6}>
           <TextField
+            select
             label="Funktionsbezeichnung Klassenleitung"
             name="kl_titel"
             value={dashboardData.kl_titel}
             onChange={handleChange}
             fullWidth
-          />
+          >
+            {funktionsOptions.map((option) => (
+              <MenuItem key={option} value={option}>
+                {option}
+              </MenuItem>
+            ))}
+          </TextField>
         </Grid>
         <Grid item xs={12} sm={6}>
           <TextField
