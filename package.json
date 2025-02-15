@@ -4,15 +4,11 @@
   "private": true,
   "homepage": "https://jonzim-cmd.github.io/zeugnis-generator",
   "dependencies": {
-    "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^5.11.0",
     "@mui/material": "^5.11.0",
-    "docxtemplater": "^3.60.0",
+    "docxtemplater": "^3.22.3",
     "file-saver": "^2.0.5",
-    "html2canvas": "^1.4.1",
-    "jspdf": "^2.5.1",
-    "pizzip": "^3.1.8",
+    "pizzip": "^3.1.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
@@ -24,7 +20,7 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "postbuild": "rm -rf docs && mkdir docs && cp -r build/* docs/ && touch docs/.nojekyll",
+    "postbuild": "rm -rf docs && mkdir -p docs && cp -r build/* docs/ && touch docs/.nojekyll",
     "deploy": "npm run build && git add docs && git commit -m \"Update docs folder\" && git push"
   },
   "browserslist": {
