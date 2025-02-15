@@ -44,7 +44,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
     return `${process.env.PUBLIC_URL}/template_jahr.docx`;
   };
 
-  // Generiert ein einzelnes Word-Dokument, das alle Schülerabschnitte enthält.
   const generateDocx = async () => {
     setProcessing(true);
     try {
@@ -64,8 +63,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       let xmlContent = zip.file(documentXmlPath).asText();
 
       // --- 1. Bereich zwischen den Lesezeichen extrahieren ---
-      // Wir gehen hier stringbasiert vor. Die Position des Endes des Start-Lesezeichens
-      // und der Beginn des End-Lesezeichens bestimmen den zu duplizierenden Bereich.
+      // Suche die Positionen des STUDENT_SECTION_START und STUDENT_SECTION_END
       const startBookmarkRegex = /(<w:bookmarkStart[^>]*w:name="STUDENT_SECTION_START"[^>]*>)/g;
       const endBookmarkRegex = /(<w:bookmarkStart[^>]*w:name="STUDENT_SECTION_END"[^>]*>)/g;
       
@@ -73,7 +71,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       if (!startMatch) {
         throw new Error('Lesezeichen "STUDENT_SECTION_START" nicht gefunden');
       }
-      // Startindex = direkt nach dem Start-Bookmark
       const startIndex = startMatch.index + startMatch[0].length;
       
       const endMatch = endBookmarkRegex.exec(xmlContent);
@@ -81,24 +78,31 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         throw new Error('Lesezeichen "STUDENT_SECTION_END" nicht gefunden');
       }
       const endIndex = endMatch.index;
-
-      // Extrahiere den Template-Abschnitt, der für jeden Schüler dupliziert wird.
-      const sectionTemplate = xmlContent.substring(startIndex, endIndex);
+      
+      // Extrahiere den Template-Abschnitt und entferne alle Bookmark-Tags
+      let sectionTemplate = xmlContent.substring(startIndex, endIndex)
+        .replace(/<w:bookmark(Start|End)[^>]*>/g, '');
 
       // --- 2. Für jeden Schüler den Template-Bereich bearbeiten ---
       let allStudentSections = "";
       for (let i = 0; i < excelData.length; i++) {
         const student = excelData[i];
-        // Mapping: Keys entsprechen exakt den Platzhaltertexten im Word-Dokument
+        let studentSection = sectionTemplate;
+
+        // Namespace-Alias: Vor der Platzhalter-Ersetzung
+        studentSection = studentSection
+          .replace(/<w:/g, '<ns:')
+          .replace(/<\/w:/g, '</ns:')
+          .replace(/ xmlns:w="[^"]*"/, '');
+
+        // Mapping: Keys entsprechen den Platzhaltertexten im Template
         const mapping = {
-          // Dashboard-Daten
           'placeholdersj': dashboardData.schuljahr || '',
           'placeholdersl': dashboardData.schulleitung || '',
           'sltitel': dashboardData.sl_titel || '',
           'kltitel': dashboardData.kl_titel || '',
           'zeugnisdatum': formatIsoDate(dashboardData.datum) || '',
           'placeholderkl': dashboardData.klassenleitung || '',
-          // Excel-Daten
           'placeholdervn': student.placeholdervn || '',
           'placeholdernm': student.placeholdernm || '',
           'placeholderklasse': student.KL || '',
@@ -126,20 +130,17 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           'buzwei': student.buzwei || ''
         };
 
-        // Beginne mit einer Kopie des Template-Abschnitts
-        let studentSection = sectionTemplate;
-
         // Zuerst den Excel-Klassenplatzhalter ersetzen
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderklasse'), 'g'),
           mapping['placeholderklasse']
         );
-        // Danach den Dashboard-Wert für Klassenleitung
+        // Dann den Dashboard-Platzhalter für Klassenleitung
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderkl'), 'g'),
           mapping['placeholderkl']
         );
-        // Die übrigen Platzhalter ersetzen – längere Schlüssel zuerst, um Überschneidungen zu vermeiden
+        // Die übrigen Platzhalter ersetzen (längere Schlüssel zuerst, um Überschneidungen zu vermeiden)
         Object.keys(mapping)
           .filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl')
           .sort((a, b) => b.length - a.length)
@@ -148,26 +149,49 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // Optional: Füge einen Seitenumbruch ein, damit jeder Schülerabschnitt auf einer neuen Seite beginnt
-        if (i < excelData.length - 1) {
-          studentSection += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
-        }
+        // Namespace-Alias zurückübersetzen
+        studentSection = studentSection
+          .replace(/<ns:/g, '<w:')
+          .replace(/<\/ns:/g, '</w:');
 
+        // Robuster Seitenumbruch: kompletter Paragraph
+        const pageBreak = `
+          <w:p>
+            <w:r>
+              <w:br w:type="page" w:subType="page"/>
+            </w:r>
+            <w:pPr>
+              <w:spacing w:after="0" w:line="240" w:lineRule="auto"/>
+            </w:pPr>
+          </w:p>
+        `;
+        if (i < excelData.length - 1) {
+          studentSection += pageBreak;
+        }
         allStudentSections += studentSection;
       }
 
       // --- 3. Zusammenbau des neuen Dokuments ---
-      // Teile den ursprünglichen XML-Inhalt in drei Bereiche:
-      // 1. Den Teil vor dem Ende des Start-Lesezeichens
-      // 2. Den neuen, zusammengefügten Schülerabschnitt
-      // 3. Den Teil ab dem Beginn des End-Lesezeichens
       const beforeSection = xmlContent.substring(0, startIndex);
       const afterSection = xmlContent.substring(endIndex);
+      let newXmlContent = beforeSection + allStudentSections + afterSection;
 
-      const newXmlContent = beforeSection + allStudentSections + afterSection;
+      // Falls im Development-Modus: XML validieren (sofern xmllint vorhanden)
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          const { validateXML } = await import('xmllint');
+          const wordSchema = ''; // Hier muss das Office Open XML-Schema definiert bzw. geladen werden.
+          const validation = validateXML({ xml: newXmlContent, schema: wordSchema });
+          if (validation.errors && validation.errors.length > 0) {
+            console.error('XML Validation Errors:', validation.errors);
+          }
+        } catch (err) {
+          console.warn('XML Validierung konnte nicht durchgeführt werden:', err);
+        }
+      }
+
       zip.file(documentXmlPath, newXmlContent);
 
-      // Generiere den Blob und speichere die fertige Datei
       const out = zip.generate({
         type: 'blob',
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
