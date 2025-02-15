@@ -12,7 +12,7 @@ const escapeRegExp = (string) => {
 // Escapen von XML-Sonderzeichen
 const escapeXml = (unsafe) => {
   return unsafe.toString().replace(/[<>&'"]/g, (c) => {
-    switch(c) {
+    switch (c) {
       case '<': return '&lt;';
       case '>': return '&gt;';
       case '&': return '&amp;';
@@ -68,11 +68,11 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
       const arrayBuffer = await response.arrayBuffer();
 
-      // --- ZIP-Handling: Original-ZIP behalten, um fehlende Dateien später zu kopieren ---
+      // --- ZIP-Struktur: Original-ZIP behalten, um fehlende Dateien später zu kopieren ---
       const originalZip = new PizZip(arrayBuffer);
       const zip = new PizZip(arrayBuffer);
 
-      // Hole das document.xml
+      // Hole document.xml
       const documentXmlPath = 'word/document.xml';
       if (!zip.file(documentXmlPath)) {
         throw new Error('Dokumentstruktur ungültig: word/document.xml nicht gefunden');
@@ -80,9 +80,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       let xmlContent = zip.file(documentXmlPath).asText();
 
       // --- 1. Verbesserte Lesezeichen-Extraktion ---
-      // Regex zur Erkennung der Bookmarks:
       const startBookmarkStartRegex = /<w:bookmarkStart[^>]*w:name="STUDENT_SECTION_START"[^>]*>/;
-      // Prüfe, ob auch ein bookmarkEnd zum STUDENT_SECTION_START existiert:
       const startBookmarkEndRegex = /<w:bookmarkEnd[^>]*w:id\s*=\s*"(\d+)"[^>]*>/;
       const endBookmarkStartRegex = /<w:bookmarkStart[^>]*w:name="STUDENT_SECTION_END"[^>]*>/;
 
@@ -94,7 +92,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       const startBookmarkStartIndex = xmlContent.indexOf(startBookmarkStartMatch[0]);
       const afterStartBookmarkStartIndex = startBookmarkStartIndex + startBookmarkStartMatch[0].length;
 
-      // Finde das zugehörige bookmarkEnd-Tag für STUDENT_SECTION_START
+      // Finde das zugehörige bookmarkEnd-Tag
       const startBookmarkEndSlice = xmlContent.slice(afterStartBookmarkStartIndex);
       const startBookmarkEndMatch = startBookmarkEndSlice.match(startBookmarkEndRegex);
       if (!startBookmarkEndMatch) {
@@ -105,7 +103,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         startBookmarkEndSlice.indexOf(startBookmarkEndMatch[0]) +
         startBookmarkEndMatch[0].length;
 
-      // Finde das bookmarkStart-Tag für STUDENT_SECTION_END (nach dem bookmarkEnd)
+      // Finde das bookmarkStart-Tag für STUDENT_SECTION_END
       const endBookmarkStartSlice = xmlContent.slice(startBookmarkEndIndex);
       const endBookmarkStartMatch = endBookmarkStartSlice.match(endBookmarkStartRegex);
       if (!endBookmarkStartMatch) {
@@ -114,10 +112,8 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       const endBookmarkStartIndex =
         startBookmarkEndIndex + endBookmarkStartSlice.indexOf(endBookmarkStartMatch[0]);
 
-      // Extrahiere den Template-Bereich:
-      // Von NACH dem bookmarkEnd von STUDENT_SECTION_START bis VOR dem bookmarkStart von STUDENT_SECTION_END
+      // Extrahiere den Template-Bereich (zwischen bookmarkEnd von START und bookmarkStart von END)
       let sectionTemplate = xmlContent.substring(startBookmarkEndIndex, endBookmarkStartIndex)
-        // Entferne alle Bookmark-Tags, damit keine doppelten Bookmarks in den duplizierten Abschnitten entstehen
         .replace(/<w:bookmark(Start|End)[^>]*>/g, '');
 
       // --- 2. Platzhalter-Ersetzung für jeden Schüler ---
@@ -126,13 +122,13 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         const student = excelData[i];
         let studentSection = sectionTemplate;
 
-        // Temporärer Namespace-Alias: Sicherstellen, dass XML-Namensräume konsistent bleiben
+        // Temporärer Namespace-Alias
         studentSection = studentSection
           .replace(/<w:/g, '<ns:')
           .replace(/<\/w:/g, '</ns:')
           .replace(/ xmlns:w="[^"]*"/, '');
 
-        // Erstelle ein Mapping (alle Werte werden mittels escapeXml geschützt)
+        // Erstelle ein Mapping mit Dashboard-Daten (escapeXml) 
         const mapping = {
           'placeholdersj': escapeXml(dashboardData.schuljahr || ''),
           'placeholdersl': escapeXml(dashboardData.schulleitung || ''),
@@ -142,22 +138,25 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           'placeholderkl': escapeXml(dashboardData.klassenleitung || '')
         };
 
-        // Für alle Felder aus den Excel-Daten – hier iterieren wir über alle Schlüssel des Schülereintrags
-        Object.entries(student).forEach(([key, val]) => {
-          mapping[key] = escapeXml(val);
+        // Mapping um alle Excel-Felder erweitern – zusätzlich Null-Byte-Filter
+        Object.entries(student).forEach(([key, value]) => {
+          let safeValue = escapeXml(value);
+          if (safeValue.includes('\u0000')) {
+            safeValue = safeValue.replace(/\u0000/g, '');
+          }
+          mapping[key] = safeValue;
         });
 
-        // Ersetze zuerst den Excel-Klassenplatzhalter
+        // Ersetze zuerst spezifische Platzhalter
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderklasse'), 'g'),
           mapping['placeholderklasse'] || ''
         );
-        // Ersetze dann den Dashboard-Platzhalter für Klassenleitung
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderkl'), 'g'),
           mapping['placeholderkl'] || ''
         );
-        // Ersetze alle übrigen Platzhalter (längere Schlüssel zuerst, um Überschneidungen zu vermeiden)
+        // Ersetze alle übrigen Platzhalter (längere Schlüssel zuerst)
         Object.keys(mapping)
           .filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl')
           .sort((a, b) => b.length - a.length)
@@ -193,15 +192,19 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       const afterSection = xmlContent.substring(endBookmarkStartIndex);
       let newXmlContent = beforeSection + allStudentSections + afterSection;
 
+      // --- Zusätzliche Anpassungen nach dem XML-Zusammenbau ---
+      // Entferne eventuell vorhandene BOM-Zeichen
+      newXmlContent = newXmlContent.replace(/^\uFEFF/, '');
+      // Stelle sicher, dass alle <w:t>-Tags korrekt geschlossen sind
+      newXmlContent = newXmlContent.replace(/<w:t([^>]*)>([^<]*)/g, '<w:t$1>$2</w:t>');
+
       // --- 4. Namespace-Konsistenz sicherstellen ---
-      // Füge den Namespace beim Öffnungs-Tag des Dokuments ein, falls nicht vorhanden
       newXmlContent = newXmlContent.replace(
         /<w:document/,
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
       );
 
       // --- 5. XML-Validierung ---
-      // Mit DOMParser prüfen wir, ob das generierte XML wohlgeformt ist.
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(newXmlContent, "text/xml");
       if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
@@ -210,26 +213,27 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
 
       // --- 6. ZIP-Struktur vervollständigen ---
-      // Stelle sicher, dass alle originalen Dateien im ZIP erhalten bleiben.
+      // Kopiere alle Dateien aus dem originalen ZIP, die im neuen ZIP fehlen
       originalZip.forEach((relativePath, file) => {
         if (!zip.file(relativePath)) {
           zip.file(relativePath, file.asUint8Array());
         }
       });
-
-      // Aktualisiere die document.xml im ZIP
       zip.file(documentXmlPath, newXmlContent);
 
-      // --- 7. Ergebnis generieren und speichern ---
+      // --- 7. Komprimierung und Speichern ---
       const out = zip.generate({
         type: 'blob',
-        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        compression: 'DEFLATE',
+        compressionOptions: {
+          level: 9
+        }
       });
       saveAs(out, 'zeugnisse_gesamt.docx');
 
-      // Optional: Zum Debuggen – Ausgabe eines XML-Ausschnitts
+      // Optional: Debug-Ausgabe (z. B. XML-Ausschnitt)
       // console.log(newXmlContent.substring(0, 1000));
-
     } catch (error) {
       console.error('Fehler beim Generieren der Word-Datei:', error);
       alert(`Fehler bei der Generierung: ${error.message || 'Unbekannter Fehler'}`);
