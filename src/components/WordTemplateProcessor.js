@@ -45,8 +45,9 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
     return `${process.env.PUBLIC_URL}/template_jahr.docx`;
   };
 
-  // Für jede Excelzeile wird nun nicht mehr ein eigenes Dokument erstellt, sondern
-  // ein einziger Dokumenteninhalt mit mehrfach dupliziertem Schülerbereich erzeugt.
+  // Neue Logik: Ein einziges Dokument wird erstellt, in dem der Bereich zwischen den
+  // Textmarkern (Word-Bookmarks) STUDENT_SECTION_START und STUDENT_SECTION_END
+  // für jede Excelzeile dupliziert wird.
   const generateDocx = async () => {
     setProcessing(true);
     try {
@@ -57,7 +58,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
       const arrayBuffer = await response.arrayBuffer();
 
-      // Erstelle ein neues Zip-Objekt aus dem ArrayBuffer
+      // Erstelle ein Zip-Objekt aus dem ArrayBuffer
       const zip = new PizZip(arrayBuffer);
       const documentXmlPath = 'word/document.xml';
       if (!zip.file(documentXmlPath)) {
@@ -65,32 +66,49 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
       let xmlContent = zip.file(documentXmlPath).asText();
 
-      // Suche nach den STUDENT_SECTION Markern
-      const startMarker = '<!-- STUDENT_SECTION_START -->';
-      const endMarker = '<!-- STUDENT_SECTION_END -->';
-      const startIndex = xmlContent.indexOf(startMarker);
-      const endIndex = xmlContent.indexOf(endMarker);
-      if (startIndex === -1 || endIndex === -1) {
-        throw new Error('Student section markers nicht gefunden');
+      // Finde den BookmarkStart für STUDENT_SECTION_START
+      const startMarkerRegex = /<w:bookmarkStart\s+[^>]*w:name="STUDENT_SECTION_START"[^>]*\/>/;
+      const startMatch = xmlContent.match(startMarkerRegex);
+      if (!startMatch) {
+        throw new Error('Student section start marker nicht gefunden');
       }
+      const startMarkerStr = startMatch[0];
+      const startIndex = xmlContent.indexOf(startMarkerStr);
 
-      // Teile das Dokument in drei Bereiche: Vor dem Wiederholungsbereich, der wiederholbare Bereich, und danach
-      const beforeSection = xmlContent.substring(0, startIndex + startMarker.length);
-      const studentSectionTemplate = xmlContent.substring(startIndex + startMarker.length, endIndex);
+      // Extrahiere die w:id des Start-Bookmarks
+      const idMatch = startMarkerStr.match(/w:id="(\d+)"/);
+      if (!idMatch) {
+        throw new Error('Kein w:id im STUDENT_SECTION_START Bookmark gefunden');
+      }
+      const bookmarkId = idMatch[1];
+
+      // Finde den korrespondierenden BookmarkEnd, der den gleichen w:id hat
+      const endMarkerRegex = new RegExp(`<w:bookmarkEnd\\s+[^>]*w:id="${bookmarkId}"[^>]*\\/?>`);
+      const endMatch = xmlContent.match(endMarkerRegex);
+      if (!endMatch) {
+        throw new Error('Student section end marker nicht gefunden');
+      }
+      const endMarkerStr = endMatch[0];
+      const endIndex = xmlContent.indexOf(endMarkerStr);
+
+      // Teile das Dokument in drei Bereiche: vor dem wiederholbaren Bereich, der wiederholbare Bereich und danach
+      const beforeSection = xmlContent.substring(0, startIndex + startMarkerStr.length);
+      const studentSectionTemplate = xmlContent.substring(startIndex + startMarkerStr.length, endIndex);
       const afterSection = xmlContent.substring(endIndex);
 
-      // Erzeuge den neuen Inhalt, indem du für jede Excelzeile den wiederholbaren Abschnitt kopierst
+      // Erzeuge den neuen, duplizierten Bereich
       let newStudentSections = "";
       for (let i = 0; i < excelData.length; i++) {
         const student = excelData[i];
-        // Mapping: Dashboard- und Excel-Daten
         const mapping = {
+          // Dashboard-Daten:
           'placeholdersj': dashboardData.schuljahr || '',
           'placeholdersl': dashboardData.schulleitung || '',
           'sltitel': dashboardData.sl_titel || '',
           'kltitel': dashboardData.kl_titel || '',
           'zeugnisdatum': formatIsoDate(dashboardData.datum) || '',
           'placeholderkl': dashboardData.klassenleitung || '',
+          // Excel-Daten:
           'placeholdervn': student.placeholdervn || '',
           'placeholdernm': student.placeholdernm || '',
           'placeholderklasse': student.KL || '',
@@ -123,19 +141,18 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         studentSection = studentSection.replace(new RegExp(escapeRegExp('placeholderklasse'), 'g'), mapping['placeholderklasse']);
         studentSection = studentSection.replace(new RegExp(escapeRegExp('placeholderkl'), 'g'), mapping['placeholderkl']);
 
-        // Ersetze anschließend alle übrigen Platzhalter – sortiert nach Länge, damit längere Namen zuerst ersetzt werden
-        const keys = Object.keys(mapping).filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl').sort((a, b) => b.length - a.length);
+        // Ersetze die restlichen Platzhalter (längere zuerst, um Überschneidungen zu vermeiden)
+        const keys = Object.keys(mapping).filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl')
+          .sort((a, b) => b.length - a.length);
         keys.forEach((key) => {
           const regex = new RegExp(escapeRegExp(key), 'g');
           studentSection = studentSection.replace(regex, mapping[key]);
         });
 
-        // Füge diesen Schülerabschnitt hinzu.
-        // Falls in deinem Template bereits ein Seitenumbruch im Student-Block enthalten ist, wird dieser übernommen.
         newStudentSections += studentSection;
       }
 
-      // Erzeuge den finalen XML-Inhalt, indem du den wiederholten Bereich einsetzt.
+      // Setze den finalen XML-Inhalt zusammen
       const finalXml = beforeSection + newStudentSections + afterSection;
       zip.file(documentXmlPath, finalXml);
 
@@ -144,7 +161,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       });
 
-      // Da nun alle Schüler in einem Dokument enthalten sind, vergeben wir einen generischen Namen.
+      // Ein einzelnes Dokument, das alle Schülerseiten enthält
       saveAs(out, 'zeugnisse_gesamt.docx');
     } catch (error) {
       console.error('Fehler beim Generieren der Word-Datei:', error);
