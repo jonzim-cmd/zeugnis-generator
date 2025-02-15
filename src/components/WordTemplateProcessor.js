@@ -33,12 +33,12 @@ const formatIsoDate = (isoStr) => {
 };
 
 // Funktion zum Auslesen des Inhalts zwischen zwei Lesezeichen (Bookmarks) mittels DOMParser und XPath
-const findBookmarkContent = (xmlContent, startBookmarkName) => {
+const findBookmarkContent = (xmlContent, startBookmarkName, endBookmarkName) => {
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
   const nsResolver = xmlDoc.createNSResolver(xmlDoc.documentElement);
 
-  // Finde das Start-Lesezeichen anhand des Namens
+  // Finde das Ende des Start-Lesezeichens (bookmarkEnd, dessen w:id entspricht dem w:id des bookmarkStart)
   const startBookmark = xmlDoc.evaluate(
     `//w:bookmarkStart[@w:name='${startBookmarkName}']`,
     xmlDoc,
@@ -49,22 +49,33 @@ const findBookmarkContent = (xmlContent, startBookmarkName) => {
   if (!startBookmark) {
     throw new Error(`Lesezeichen "${startBookmarkName}" nicht gefunden`);
   }
-  // Finde das zugehörige End-Lesezeichen anhand der ID
-  const bookmarkId = startBookmark.getAttribute("w:id");
-  const endBookmark = xmlDoc.evaluate(
-    `//w:bookmarkEnd[@w:id='${bookmarkId}']`,
+  const startBookmarkEnd = xmlDoc.evaluate(
+    `//w:bookmarkEnd[@w:id=(//w:bookmarkStart[@w:name='${startBookmarkName}']/@w:id)]`,
     xmlDoc,
     nsResolver,
     XPathResult.ANY_UNORDERED_NODE_TYPE,
     null
   ).singleNodeValue;
-  if (!endBookmark) {
-    throw new Error(`End-Lesezeichen für "${startBookmarkName}" nicht gefunden`);
+  if (!startBookmarkEnd) {
+    throw new Error(`bookmarkEnd für "${startBookmarkName}" nicht gefunden`);
   }
-  // Extrahiere den Inhalt zwischen den Lesezeichen als String
+
+  // Finde das Start-Lesezeichen des Endbereichs anhand des Namens
+  const endBookmarkStart = xmlDoc.evaluate(
+    `//w:bookmarkStart[@w:name='${endBookmarkName}']`,
+    xmlDoc,
+    nsResolver,
+    XPathResult.ANY_UNORDERED_NODE_TYPE,
+    null
+  ).singleNodeValue;
+  if (!endBookmarkStart) {
+    throw new Error(`Lesezeichen "${endBookmarkName}" nicht gefunden`);
+  }
+
+  // Extrahiere den Inhalt zwischen startBookmarkEnd und endBookmarkStart
   let content = "";
-  let currentNode = startBookmark.nextSibling;
-  while (currentNode && currentNode !== endBookmark) {
+  let currentNode = startBookmarkEnd.nextSibling;
+  while (currentNode && currentNode !== endBookmarkStart) {
     content += new XMLSerializer().serializeToString(currentNode);
     currentNode = currentNode.nextSibling;
   }
@@ -106,7 +117,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       let xmlContent = zip.file(documentXmlPath).asText();
 
       // Hole den wiederholbaren Abschnitt mithilfe der Lesezeichen-Funktion
-      const studentSectionTemplate = findBookmarkContent(xmlContent, "STUDENT_SECTION_START");
+      const studentSectionTemplate = findBookmarkContent(xmlContent, "STUDENT_SECTION_START", "STUDENT_SECTION_END");
 
       // Erzeuge den neuen, duplizierten Bereich für alle Excelzeilen
       let newStudentSections = "";
@@ -169,33 +180,33 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
       const nsResolver = xmlDoc.createNSResolver(xmlDoc.documentElement);
 
-      // Finde das Start-Lesezeichen STUDENT_SECTION_START
-      const startBookmark = xmlDoc.evaluate(
-        `//w:bookmarkStart[@w:name='STUDENT_SECTION_START']`,
+      // Finde das bookmarkEnd von STUDENT_SECTION_START
+      const startBookmarkEnd = xmlDoc.evaluate(
+        `//w:bookmarkEnd[@w:id=(//w:bookmarkStart[@w:name='STUDENT_SECTION_START']/@w:id)]`,
         xmlDoc,
         nsResolver,
         XPathResult.ANY_UNORDERED_NODE_TYPE,
         null
       ).singleNodeValue;
-      if (!startBookmark) {
-        throw new Error('Lesezeichen "STUDENT_SECTION_START" nicht gefunden');
+      if (!startBookmarkEnd) {
+        throw new Error('bookmarkEnd für "STUDENT_SECTION_START" nicht gefunden');
       }
-      const bookmarkId = startBookmark.getAttribute("w:id");
-      // Finde das zugehörige End-Lesezeichen STUDENT_SECTION_END
-      const endBookmark = xmlDoc.evaluate(
-        `//w:bookmarkEnd[@w:id='${bookmarkId}']`,
+
+      // Finde das bookmarkStart von STUDENT_SECTION_END
+      const endBookmarkStart = xmlDoc.evaluate(
+        `//w:bookmarkStart[@w:name='STUDENT_SECTION_END']`,
         xmlDoc,
         nsResolver,
         XPathResult.ANY_UNORDERED_NODE_TYPE,
         null
       ).singleNodeValue;
-      if (!endBookmark) {
+      if (!endBookmarkStart) {
         throw new Error('Lesezeichen "STUDENT_SECTION_END" nicht gefunden');
       }
 
-      // Entferne alle Knoten zwischen Start- und End-Lesezeichen
-      let currentNode = startBookmark.nextSibling;
-      while (currentNode && currentNode !== endBookmark) {
+      // Entferne alle Knoten zwischen startBookmarkEnd und endBookmarkStart
+      let currentNode = startBookmarkEnd.nextSibling;
+      while (currentNode && currentNode !== endBookmarkStart) {
         const next = currentNode.nextSibling;
         currentNode.parentNode.removeChild(currentNode);
         currentNode = next;
@@ -206,10 +217,10 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         `<wrapper xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${newStudentSections}</wrapper>`,
         "text/xml"
       ).documentElement;
-      // Füge alle Kindelemente des Wrappers zwischen Start- und End-Lesezeichen ein
+      // Füge alle Kindelemente des Wrappers zwischen startBookmarkEnd und endBookmarkStart ein
       while (fragmentWrapper.firstChild) {
         const child = fragmentWrapper.firstChild;
-        startBookmark.parentNode.insertBefore(xmlDoc.importNode(child, true), endBookmark);
+        startBookmarkEnd.parentNode.insertBefore(xmlDoc.importNode(child, true), endBookmarkStart);
       }
 
       // Serialisiere den DOM zurück in einen String
