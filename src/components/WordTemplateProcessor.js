@@ -88,8 +88,9 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
     return `${process.env.PUBLIC_URL}/template_jahr.docx`;
   };
 
-  // Es wird ein einziges Dokument erstellt, in dem der Bereich zwischen den
-  // Lesezeichen STUDENT_SECTION_START und STUDENT_SECTION_END für jede Excelzeile dupliziert wird.
+  // Dieses Skript erzeugt ein einzelnes Dokument, in dem der wiederholbare Bereich
+  // (zwischen den Lesezeichen STUDENT_SECTION_START und STUDENT_SECTION_END)
+  // für jede Excelzeile dupliziert wird.
   const generateDocx = async () => {
     setProcessing(true);
     try {
@@ -108,7 +109,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
       let xmlContent = zip.file(documentXmlPath).asText();
 
-      // Hole den wiederholbaren Abschnitt zwischen dem Lesezeichen STUDENT_SECTION_START
+      // Hole den wiederholbaren Abschnitt mithilfe der Lesezeichen-Funktion
       const studentSectionTemplate = findBookmarkContent(xmlContent, "STUDENT_SECTION_START");
 
       // Erzeuge den neuen, duplizierten Bereich für alle Excelzeilen
@@ -151,12 +152,12 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           'buzwei': student.buzwei || ''
         };
 
+        // Vermeide Überschneidungen:
         let studentSection = studentSectionTemplate;
-        // Zuerst werden Überschneidungen bei "placeholderklasse" und "placeholderkl" vermieden:
         studentSection = studentSection.replace(new RegExp(escapeRegExp('placeholderklasse'), 'g'), mapping['placeholderklasse']);
         studentSection = studentSection.replace(new RegExp(escapeRegExp('placeholderkl'), 'g'), mapping['placeholderkl']);
 
-        // Ersetze die übrigen Platzhalter (längere zuerst)
+        // Ersetze alle weiteren Platzhalter (längere zuerst)
         const keys = Object.keys(mapping)
           .filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl')
           .sort((a, b) => b.length - a.length);
@@ -167,15 +168,51 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         newStudentSections += studentSection;
       }
 
-      // Ersetze den Bereich zwischen den Lesezeichen durch den duplizierten Inhalt.
-      // Hier wird angenommen, dass im Template an der Stelle des Lesezeichens nur der wiederholbare Bereich steht.
-      // (Die restliche Dokumentstruktur, z. B. Kopf- und Fußzeile, bleibt unverändert.)
-      // Wir ersetzen den gesamten Inhalt zwischen STUDENT_SECTION_START und STUDENT_SECTION_END.
-      // Dazu wird ein Regex verwendet, der von <w:bookmarkStart ...> bis zum passenden <w:bookmarkEnd ...> alles ersetzt.
-      const bookmarkSectionRegex = new RegExp(
-        `(<w:bookmarkStart\\s+[^>]*w:name="STUDENT_SECTION_START"[^>]*>)([\\s\\S]*?)(<w:bookmarkEnd\\s+[^>]*w:id="\\d+"[^>]*>)`
-      );
-      xmlContent = xmlContent.replace(bookmarkSectionRegex, `$1${newStudentSections}$3`);
+      // Anstatt per Regex zu ersetzen, parsen wir das XML in einen DOM, entfernen den alten Bereich
+      // zwischen den Lesezeichen und fügen den neuen, duplizierten Inhalt ein.
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
+      const nsResolver = xmlDoc.createNSResolver(xmlDoc.documentElement);
+
+      const startBookmark = xmlDoc.evaluate(
+        `//w:bookmarkStart[@w:name='STUDENT_SECTION_START']`,
+        xmlDoc,
+        nsResolver,
+        XPathResult.ANY_UNORDERED_NODE_TYPE,
+        null
+      ).singleNodeValue;
+      if (!startBookmark) {
+        throw new Error('Lesezeichen "STUDENT_SECTION_START" nicht gefunden');
+      }
+      const bookmarkId = startBookmark.getAttribute("w:id");
+      const endBookmark = xmlDoc.evaluate(
+        `//w:bookmarkEnd[@w:id='${bookmarkId}']`,
+        xmlDoc,
+        nsResolver,
+        XPathResult.ANY_UNORDERED_NODE_TYPE,
+        null
+      ).singleNodeValue;
+      if (!endBookmark) {
+        throw new Error('Lesezeichen "STUDENT_SECTION_END" nicht gefunden');
+      }
+
+      // Entferne alle Knoten zwischen Start- und End-Lesezeichen
+      let currentNode = startBookmark.nextSibling;
+      while (currentNode && currentNode !== endBookmark) {
+        const next = currentNode.nextSibling;
+        currentNode.parentNode.removeChild(currentNode);
+        currentNode = next;
+      }
+
+      // Erzeuge ein Wrapper-Dokument für den neuen Inhalt und füge alle Kinder ein
+      const fragmentWrapper = parser.parseFromString(`<wrapper>${newStudentSections}</wrapper>`, "text/xml").documentElement;
+      while (fragmentWrapper.firstChild) {
+        const child = fragmentWrapper.firstChild;
+        startBookmark.parentNode.insertBefore(xmlDoc.importNode(child, true), endBookmark);
+      }
+
+      // Serialisiere den DOM zurück in einen String
+      xmlContent = new XMLSerializer().serializeToString(xmlDoc);
 
       zip.file(documentXmlPath, xmlContent);
 
@@ -184,7 +221,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       });
 
-      // Ein einzelnes Dokument, das alle Schülerseiten enthält
+      // Erstelle ein einzelnes Dokument, das alle Schülerseiten enthält
       saveAs(out, 'zeugnisse_gesamt.docx');
     } catch (error) {
       console.error('Fehler beim Generieren der Word-Datei:', error);
