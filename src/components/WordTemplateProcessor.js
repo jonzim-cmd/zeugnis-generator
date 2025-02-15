@@ -118,6 +118,10 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         .replace(/<w:bookmark(Start|End)[^>]*>/g, '');
 
       // --- 2. Platzhalter-Ersetzung für jeden Schüler ---
+      // Stelle sicher, dass excelData ein Array ist
+      if (!Array.isArray(excelData)) {
+        excelData = [excelData];
+      }
       let allStudentSections = "";
       for (let i = 0; i < excelData.length; i++) {
         const student = excelData[i];
@@ -242,17 +246,4 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       console.error('Fehler beim Generieren der Word-Datei:', error);
       alert(`Fehler bei der Generierung: ${error.message || 'Unbekannter Fehler'}`);
     } finally {
-      setProcessing(false);
-    }
-  };
-
-  return (
-    <div>
-      <button onClick={generateDocx} disabled={processing}>
-        {processing ? 'Generiere...' : 'Word-Dokument erstellen'}
-      </button>
-    </div>
-  );
-};
-
-export default WordTemplateProcessor;
+      setProcessing(false)
