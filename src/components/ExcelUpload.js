@@ -3,14 +3,8 @@ import { Button, Typography } from '@mui/material';
 import * as XLSX from 'xlsx';
 import { AppContext } from '../context/AppContext';
 
-/*
-  ExcelUpload-Komponente:
-  - Ermöglicht den Upload einer Excel-Datei.
-  - Liest die Datei mithilfe von SheetJS (xlsx) ein.
-  - Speichert die ausgelesenen Daten im globalen State.
-*/
 const ExcelUpload = () => {
-  const { setExcelData } = useContext(AppContext);
+  const { setExcelData, setDashboardData } = useContext(AppContext);
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -23,8 +17,13 @@ const ExcelUpload = () => {
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-      // Hier könnte man optional die Spaltennamen validieren.
       setExcelData(jsonData);
+
+      // Falls im ersten Datensatz "Zeugnisart" den Wert "ZZ" hat,
+      // wird im Dashboard die Auswahl auf "Zwischenzeugnis" voreingestellt.
+      if (jsonData.length > 0 && jsonData[0].Zeugnisart === "ZZ") {
+        setDashboardData(prev => ({ ...prev, zeugnisart: "Zwischenzeugnis" }));
+      }
     };
     reader.readAsBinaryString(file);
   };
