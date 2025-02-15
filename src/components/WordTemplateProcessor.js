@@ -35,8 +35,11 @@ const WordTemplateProcessor = ({ student }) => {
       const documentXmlPath = 'word/document.xml';
       if (zip.file(documentXmlPath)) {
         let xmlContent = zip.file(documentXmlPath).asText();
-        // Ersetze nur <<...>>-Platzhalter, die nicht bereits Teil von {{...}} sind.
-        xmlContent = xmlContent.replace(/(?<!\{)<<([^{}]+)>>/g, (match, p1) => `{{${p1.trim()}}}`);
+        // Ersetze alle Vorkommen von <<…>> durch {{…}}.
+        // Dabei greift der Regex nur auf Zeichen zwischen << und >>, die nicht die Zeichen < oder > enthalten.
+        xmlContent = xmlContent.replace(/<<([^<>]+)>>/g, (match, p1) => {
+          return '{{' + p1.trim() + '}}';
+        });
         zip.file(documentXmlPath, xmlContent);
       } else {
         console.warn('word/document.xml nicht gefunden');
@@ -46,7 +49,7 @@ const WordTemplateProcessor = ({ student }) => {
       const doc = new Docxtemplater();
       doc.loadZip(zip);
 
-      // Konfiguriere den nullGetter, um fehlende Werte durch einen leeren String zu ersetzen.
+      // Konfiguriere den nullGetter, damit fehlende Platzhalter nicht Fehler verursachen.
       doc.setOptions({
         nullGetter: (part) => ''
       });
