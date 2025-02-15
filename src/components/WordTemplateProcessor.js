@@ -29,31 +29,32 @@ const WordTemplateProcessor = ({ student, dashboardData }) => {
       }
       const arrayBuffer = await response.arrayBuffer();
       const zip = new PizZip(arrayBuffer);
-      
-      // Lese den Inhalt der Hauptdokument-XML
+
+      // Lade den Inhalt der Dokument-XML
       let documentXml = zip.file("word/document.xml").asText();
 
-      // Daten für die Platzhalter – diese kommen aus Excel (student) und dem Dashboard
+      // Daten zum Ersetzen – Beachte:
+      // - Vorname und Nachname kommen aus dem student-Objekt (Excel)
+      // - SJ, KL, Schulleitung und Klassenleitung kommen aus dem dashboardData-Objekt
       const data = {
         Vorname: student.Vorname || '',
         Nachname: student.Nachname || '',
-        SJ: dashboardData.schuljahr || '',
-        Kl: student.Klasse || '',
-        GDat: student.Geburtsdatum || '',
-        GOrt: student.Geburtsort || ''
+        SJ: dashboardData.schuljahr || '',           // Schuljahr aus dem Dashboard
+        KL: dashboardData.KL || '',                     // Klasse aus dem Dashboard
+        Schulleitung: dashboardData.schulleitung || '', // Schulleitung aus dem Dashboard
+        Klassenleitung: dashboardData.klassenleitung || ''// Klassenleitung aus dem Dashboard
       };
 
-      // Ersetze Platzhalter in beiden Formaten: {{...}} und <<...>>
-      // Der reguläre Ausdruck sucht nach EITHER {{Name}} oder <<Name>>
+      // Ersetze in der XML alle Platzhalter – unterstützt sowohl {{...}} als auch <<...>>
       documentXml = documentXml
         .replace(/(?:{{|<<)Vorname(?:}}|>>)/g, data.Vorname)
         .replace(/(?:{{|<<)Nachname(?:}}|>>)/g, data.Nachname)
         .replace(/(?:{{|<<)SJ(?:}}|>>)/g, data.SJ)
-        .replace(/(?:{{|<<)Kl(?:}}|>>)/g, data.Kl)
-        .replace(/(?:{{|<<)GDat(?:}}|>>)/g, data.GDat)
-        .replace(/(?:{{|<<)GOrt(?:}}|>>)/g, data.GOrt);
+        .replace(/(?:{{|<<)KL(?:}}|>>)/g, data.KL)
+        .replace(/(?:{{|<<)Schulleitung(?:}}|>>)/g, data.Schulleitung)
+        .replace(/(?:{{|<<)Klassenleitung(?:}}|>>)/g, data.Klassenleitung);
 
-      // Schreibe die modifizierte XML zurück in das Zip-Archiv
+      // Schreibe die modifizierte XML zurück in das ZIP-Archiv
       zip.file("word/document.xml", documentXml);
 
       // Erzeuge das finale DOCX als Blob
@@ -61,7 +62,7 @@ const WordTemplateProcessor = ({ student, dashboardData }) => {
         type: "blob",
         mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       });
-      
+
       // Starte den Download
       saveAs(out, "zeugnis.docx");
     } catch (error) {
