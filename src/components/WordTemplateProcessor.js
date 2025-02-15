@@ -180,21 +180,22 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       let newXmlContent = beforeSection + allStudentSections + afterSection;
 
       // --- 4. Zusätzliche Anpassungen am XML ---
-
-      // 1. Alle existierenden XML-Deklarationen und BOM-Zeichen entfernen
+      // 1. Alle existierenden XML-Deklarationen und BOM entfernen
       newXmlContent = newXmlContent
-        .replace(/<\?xml.*?\?>\n?/g, '') // Alle XML-Header entfernen
-        .replace(/^\uFEFF/, '')          // BOM entfernen
-        .trim();                        // Führende/folgende Leerzeichen entfernen
-
-      // 2. XML-Strukturanpassungen
-      newXmlContent = newXmlContent
-        .replace(/<w:t([^>]*)>([^<]*)(?!<\/w:t>)/g, '<w:t$1>$2</w:t>') // Fehlende </w:t>-Tags schließen, falls nicht vorhanden
-        .replace(/\s+xmlns:w="[^"]*"/g, '')                             // Alle xmlns:w-Deklarationen entfernen
-        .replace(/<w:document/, '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"');
-
-      // 3. Neue XML-Deklaration AM ABSOLUTEN ANFANG einfügen
-      newXmlContent = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + newXmlContent;
+        .replace(/<\?xml.*?\?>\n?/g, '')
+        .replace(/^\uFEFF/, '')
+        .trim();
+      // 2. Fehlende </w:t>-Tags schließen (mit verbesserter Regex)
+      newXmlContent = newXmlContent.replace(
+        /(<w:t\b[^>]*>)([^<]+)(?!<\/w:t>)/g,
+        '$1$2</w:t>'
+      );
+      // 3. XML-Header und Namespace-Deklaration einfügen
+      newXmlContent = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        newXmlContent.replace(
+          /<w:document/,
+          '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+        );
 
       // --- 5. XML-Validierung ---
       const parser = new DOMParser();
