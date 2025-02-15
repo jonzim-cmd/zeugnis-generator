@@ -22,7 +22,7 @@ const formatExcelDate = (dateVal) => {
   return dateVal;
 };
 
-// Konvertiert einen ISO-Datum-String (z. B. "2025-06-10") in das Format TT.MM.JJJJ
+// Konvertiert einen ISO-Datum-String (z. B. "2025-06-10") in das Format TT.MM.JJJJ
 const formatIsoDate = (isoStr) => {
   if (!isoStr) return '';
   const date = new Date(isoStr);
@@ -68,21 +68,22 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         }
         let xmlContent = zip.file(documentXmlPath).asText();
 
-        // Mapping: Beachte, dass die Keys exakt den Platzhaltertexten im Word-Dokument entsprechen müssen.
+        // Mapping: Die Keys müssen exakt den Platzhaltertexten in deinem Word-Dokument entsprechen.
+        // Dashboard-Daten:
         const mapping = {
-          // Dashboard (global):
           'placeholdersj': dashboardData.schuljahr || '',
           'placeholdersl': dashboardData.schulleitung || '',
           'sltitel': dashboardData.sl_titel || '',
           'kltitel': dashboardData.kl_titel || '',
           'zeugnisdatum': formatIsoDate(dashboardData.datum) || '',
-          'placeholderkl': dashboardData.KL || '',
+          // Dashboard-Wert für Klassenleitung:
+          'placeholderkl': dashboardData.klassenleitung || '',
 
-          // Excel (pro Schüler):
+          // Excel-Daten:
           'placeholdervn': student.placeholdervn || '',
           'placeholdernm': student.placeholdernm || '',
-          // Für den Excel-Wert der Klassenangabe: Der Platzhalter im Template lautet "placeholderklasse"
-          'placeholderklasse': student.placeholderkl || '',
+          // Hier verwenden wir den Excel-Wert aus der Spalte "KL":
+          'placeholderklasse': student.KL || '',
           'gdat': formatExcelDate(student.gdat) || '',
           'gort': student.gort || '',
           'f1': student.f1 || '',
@@ -107,8 +108,17 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           'buzwei': student.buzwei || ''
         };
 
-        // Um Überschneidungen zu vermeiden (z. B. "f8" und "f8n"), sortieren wir die Keys nach Länge (längere zuerst)
-        const keys = Object.keys(mapping).sort((a, b) => b.length - a.length);
+        // Ersetze zuerst den Excel-Klassenplatzhalter ("placeholderklasse")
+        const regexExcelKl = new RegExp(escapeRegExp('placeholderklasse'), 'g');
+        xmlContent = xmlContent.replace(regexExcelKl, mapping['placeholderklasse']);
+        // Ersetze danach den Dashboard-Wert für Klassenleitung ("placeholderkl")
+        const regexDashKl = new RegExp(escapeRegExp('placeholderkl'), 'g');
+        xmlContent = xmlContent.replace(regexDashKl, mapping['placeholderkl']);
+
+        // Um Überschneidungen zu vermeiden (z. B. "f8" und "f8n"), sortieren wir die übrigen Keys nach Länge (längere zuerst)
+        const keys = Object.keys(mapping)
+          .filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl')
+          .sort((a, b) => b.length - a.length);
         keys.forEach((key) => {
           const regex = new RegExp(escapeRegExp(key), 'g');
           xmlContent = xmlContent.replace(regex, mapping[key]);
@@ -121,7 +131,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         });
 
-        // Speichere das Dokument, z. B. "zeugnis_Meyer_1.docx"
         const filename = `zeugnis_${student.placeholdernm || 'unbekannt'}_${i + 1}.docx`;
         saveAs(out, filename);
       }
