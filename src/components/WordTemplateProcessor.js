@@ -7,16 +7,17 @@ import { saveAs } from 'file-saver';
 const WordTemplateProcessor = ({ student, dashboardData }) => {
   const [processing, setProcessing] = useState(false);
 
-  // Wähle das richtige DOCX-Template basierend auf der Zeugnisart
+  // Wähle das richtige DOCX-Template basierend auf der Zeugnisart.
+  // Mit process.env.PUBLIC_URL wird der richtige Pfad zum public-Ordner erzeugt.
   const getTemplateFileName = () => {
     const art = dashboardData.zeugnisart || '';
     if (art === 'Zwischenzeugnis') {
-      return '/template_zwischen.docx';
+      return `${process.env.PUBLIC_URL}/template_zwischen.docx`;
     } else if (art === 'Abschlusszeugnis') {
-      return '/template_abschluss.docx';
+      return `${process.env.PUBLIC_URL}/template_abschluss.docx`;
     }
     // Standard: Jahreszeugnis
-    return '/template_jahr.docx';
+    return `${process.env.PUBLIC_URL}/template_jahr.docx`;
   };
 
   const generateDocx = async () => {
@@ -30,10 +31,10 @@ const WordTemplateProcessor = ({ student, dashboardData }) => {
       const arrayBuffer = await response.arrayBuffer();
       const zip = new PizZip(arrayBuffer);
 
-      // Autodetect: Lese den Inhalt der DOCX (document.xml)
-      const documentXML = zip.file("word/document.xml").asText();
-      let delimiters = { start: '{{', end: '}}' }; // Standard
-      if (documentXML.includes("<<") && documentXML.includes(">>")) {
+      // Lese den Inhalt der document.xml, um zu prüfen, welches Platzhalterschema verwendet wird
+      const documentXML = zip.file("word/document.xml")?.asText();
+      let delimiters = { start: '{{', end: '}}' }; // Standardformat
+      if (documentXML && documentXML.includes("<<") && documentXML.includes(">>")) {
         delimiters = { start: '<<', end: '>>' };
       }
 
@@ -50,7 +51,7 @@ const WordTemplateProcessor = ({ student, dashboardData }) => {
         Nachname: student.Nachname || '',
         GDat: student.Geburtsdatum || '',
         GOrt: student.Geburtsort || ''
-        // Weitere Platzhalter hier ergänzen, falls benötigt
+        // Füge hier weitere Platzhalter hinzu, falls benötigt.
       };
 
       doc.setData(data);
