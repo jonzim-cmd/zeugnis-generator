@@ -8,6 +8,7 @@ const WordTemplateProcessor = ({ student }) => {
   const [processing, setProcessing] = useState(false);
   const { dashboardData } = useContext(AppContext);
 
+  // Wähle das richtige DOCX-Template basierend auf der Zeugnisart.
   const getTemplateFileName = () => {
     const art = dashboardData.zeugnisart || '';
     if (art === 'Zwischenzeugnis') {
@@ -15,6 +16,7 @@ const WordTemplateProcessor = ({ student }) => {
     } else if (art === 'Abschlusszeugnis') {
       return `${process.env.PUBLIC_URL}/template_abschluss.docx`;
     }
+    // Standard: Jahreszeugnis
     return `${process.env.PUBLIC_URL}/template_jahr.docx`;
   };
 
@@ -26,40 +28,54 @@ const WordTemplateProcessor = ({ student }) => {
       if (!response.ok) throw new Error('Template nicht gefunden');
       const arrayBuffer = await response.arrayBuffer();
 
-      const zip = new PizZip(arrayBuffer);
+      // Erstelle ein ZIP-Objekt aus dem ArrayBuffer.
+      let zip = new PizZip(arrayBuffer);
+
+      // Durchlaufe alle .xml-Dateien und ersetze <<...>> durch {{...}}
+      const xmlFiles = Object.keys(zip.files).filter((fileName) =>
+        fileName.endsWith('.xml')
+      );
+      xmlFiles.forEach((fileName) => {
+        let xmlContent = zip.file(fileName).asText();
+        xmlContent = xmlContent.replace(/<<([^>]+)>>/g, '{{$1}}');
+        zip.file(fileName, xmlContent);
+      });
+
+      // Lade docxtemplater mit dem aktualisierten ZIP.
       const doc = new Docxtemplater();
       doc.loadZip(zip);
 
-      // Zusammenführen von Excel-Daten (student) und Dashboard-Daten
+      // Füge Daten aus Excel (student) und Dashboard zusammen.
       const data = {
         ...student,
         ...dashboardData,
-        Zeugnisdatum: dashboardData.datum,
-        Sl_Titel: dashboardData.sl_titel,
-        Kl_Titel: dashboardData.kl_titel
+        Zeugnisdatum: dashboardData.datum
+        // Falls du z.B. im Template auch {{SJ}} nutzt, kannst du hier ergänzen:
+        // SJ: dashboardData.schuljahr
       };
 
+      // Setze die Daten und rendere das Template.
       doc.setData(data);
       doc.render();
 
+      // Erzeuge die finale DOCX als Blob und starte den Download.
       const out = doc.getZip().generate({
         type: 'blob',
-        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       });
-
       saveAs(out, `zeugnis_${student.Nachname}.docx`);
     } catch (error) {
-      console.error('Fehler:', error);
+      console.error('Fehler beim Generieren der Word-Datei:', error);
       alert('Fehler bei der Generierung!');
-    } finally {
-      setProcessing(false);
     }
+    setProcessing(false);
   };
 
   return (
     <div>
       <button onClick={generateDocx} disabled={processing}>
-        {processing ? "Generiere..." : "Word-Dokument erstellen"}
+        {processing ? 'Generiere...' : 'Word-Dokument erstellen'}
       </button>
     </div>
   );
