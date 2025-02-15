@@ -1,14 +1,13 @@
 // src/components/WordTemplateProcessor.js
 import React, { useState } from 'react';
 import PizZip from 'pizzip';
-import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
 
 const WordTemplateProcessor = ({ student, dashboardData }) => {
   const [processing, setProcessing] = useState(false);
 
   // Wähle das richtige DOCX-Template basierend auf der Zeugnisart.
-  // Mit process.env.PUBLIC_URL wird der richtige Pfad zum public-Ordner erzeugt.
+  // Mit process.env.PUBLIC_URL wird der korrekte Pfad zum public-Ordner erzeugt.
   const getTemplateFileName = () => {
     const art = dashboardData.zeugnisart || '';
     if (art === 'Zwischenzeugnis') {
@@ -30,46 +29,40 @@ const WordTemplateProcessor = ({ student, dashboardData }) => {
       }
       const arrayBuffer = await response.arrayBuffer();
       const zip = new PizZip(arrayBuffer);
+      
+      // Lese den Inhalt der Hauptdokument-XML
+      let documentXml = zip.file("word/document.xml").asText();
 
-      // Lese den Inhalt der document.xml, um zu prüfen, welches Platzhalterschema verwendet wird
-      const documentXML = zip.file("word/document.xml")?.asText();
-      let delimiters = { start: '{{', end: '}}' }; // Standardformat
-      if (documentXML && documentXML.includes("<<") && documentXML.includes(">>")) {
-        delimiters = { start: '<<', end: '>>' };
-      }
-
-      const doc = new Docxtemplater(zip, {
-        paragraphLoop: true,
-        linebreaks: true,
-        delimiters: delimiters,
-      });
-
+      // Daten für die Platzhalter – diese kommen aus Excel (student) und dem Dashboard
       const data = {
-        SJ: dashboardData.schuljahr || '',
-        Kl: student.Klasse || '',
         Vorname: student.Vorname || '',
         Nachname: student.Nachname || '',
+        SJ: dashboardData.schuljahr || '',
+        Kl: student.Klasse || '',
         GDat: student.Geburtsdatum || '',
         GOrt: student.Geburtsort || ''
-        // Füge hier weitere Platzhalter hinzu, falls benötigt.
       };
 
-      doc.setData(data);
+      // Ersetze Platzhalter in beiden Formaten: {{...}} und <<...>>
+      // Der reguläre Ausdruck sucht nach EITHER {{Name}} oder <<Name>>
+      documentXml = documentXml
+        .replace(/(?:{{|<<)Vorname(?:}}|>>)/g, data.Vorname)
+        .replace(/(?:{{|<<)Nachname(?:}}|>>)/g, data.Nachname)
+        .replace(/(?:{{|<<)SJ(?:}}|>>)/g, data.SJ)
+        .replace(/(?:{{|<<)Kl(?:}}|>>)/g, data.Kl)
+        .replace(/(?:{{|<<)GDat(?:}}|>>)/g, data.GDat)
+        .replace(/(?:{{|<<)GOrt(?:}}|>>)/g, data.GOrt);
 
-      try {
-        doc.render();
-      } catch (error) {
-        console.error("Fehler beim Rendern des Dokuments:", error);
-        setProcessing(false);
-        return;
-      }
+      // Schreibe die modifizierte XML zurück in das Zip-Archiv
+      zip.file("word/document.xml", documentXml);
 
-      const out = doc.getZip().generate({
+      // Erzeuge das finale DOCX als Blob
+      const out = zip.generate({
         type: "blob",
-        mimeType:
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       });
-
+      
+      // Starte den Download
       saveAs(out, "zeugnis.docx");
     } catch (error) {
       console.error("Fehler beim Generieren der Word-Datei:", error);
