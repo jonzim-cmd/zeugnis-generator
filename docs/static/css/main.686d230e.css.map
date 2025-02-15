@@ -1,0 +1,1 @@
+{"version":3,"file":"static/css/main.686d230e.css","mappings":"AACA,KAEE,6BAAiC,CADjC,QAEF","sources":["App.css"],"sourcesContent":["/* Minimaler Style für die Anwendung */\r\nbody {\r\n  margin: 0;\r\n  font-family: 'Roboto', sans-serif;\r\n}\r\n"],"names":[],"sourceRoot":""}
