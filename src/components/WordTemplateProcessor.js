@@ -1,19 +1,11 @@
 import React, { useState, useContext } from 'react';
 import PizZip from 'pizzip';
-import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
 import { AppContext } from '../context/AppContext';
 
-// Helper: Escape regex-special characters
+// Hilfsfunktion, um regex-sichere Strings zu erzeugen
 const escapeRegExp = (string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-};
-
-// Diese Funktion ersetzt ALLE <<...>>-Tags im Inhalt global durch {{...}}.
-const sanitizeXmlContent = (content) => {
-  return content.replace(/<<([^<>]+)>>/g, (match, p1) => {
-    return `{{${p1.trim()}}}`;
-  });
 };
 
 const WordTemplateProcessor = ({ student }) => {
@@ -38,7 +30,6 @@ const WordTemplateProcessor = ({ student }) => {
       if (!response.ok) {
         throw new Error(`Template nicht gefunden: ${templateFile}`);
       }
-
       const arrayBuffer = await response.arrayBuffer();
       const zip = new PizZip(arrayBuffer);
 
@@ -47,42 +38,51 @@ const WordTemplateProcessor = ({ student }) => {
       if (!zip.file(documentXmlPath)) {
         throw new Error('Dokumentstruktur ungültig: word/document.xml nicht gefunden');
       }
-      const xmlContent = zip.file(documentXmlPath).asText();
-      const sanitizedContent = sanitizeXmlContent(xmlContent);
-      zip.file(documentXmlPath, sanitizedContent);
+      let xmlContent = zip.file(documentXmlPath).asText();
 
-      // Konfiguriere und lade Docxtemplater
-      const doc = new Docxtemplater();
-      doc.loadZip(zip);
-      
-      // nullGetter sorgt dafür, dass fehlende Werte nicht zu Fehlern führen
-      // und der parser entfernt ggf. überflüssige Klammern.
-      doc.setOptions({
-        nullGetter: () => '',
-        parser: (tag) => {
-          tag = tag.replace(/[<>]/g, '').trim();
-          return {
-            get: (scope) => scope[tag] || ''
-          };
-        }
-      });
-
-      const data = {
-        ...student,
-        ...dashboardData,
-        Zeugnisdatum: dashboardData.datum
+      // Mapping: Ersetze die exakten Platzhalter durch die entsprechenden Werte.
+      const mapping = {
+        'Placeholder_SJ': dashboardData.schuljahr || '',
+        'Placeholder_KL': dashboardData.KL || '',
+        'Placeholder_Vorname': student.Vorname || '',
+        'Placeholder_Nachname': student.Nachname || '',
+        'F1': student.F1 || '',
+        'F2': student.F2 || '',
+        'F3': student.F3 || '',
+        'F4': student.F4 || '',
+        'F5': student.F5 || '',
+        'F6': student.F6 || '',
+        'F7': student.F7 || '',
+        'F8': student.F8 || '',
+        'F9': student.F9 || '',
+        'F1_N': student.F1_N || '',
+        'F2_N': student.F2_N || '',
+        'F3_N': student.F3_N || '',
+        'F4_N': student.F4_N || '',
+        'F5_N': student.F5_N || '',
+        'F6_N': student.F6_N || '',
+        'F7_N': student.F7_N || '',
+        'F8_N': student.F8_N || '',
+        'F9_N': student.F9_N || '',
+        'BU': student.BU || '',
+        'BU2': student.BU2 || '',
+        'Zeugnisdatum': dashboardData.datum || '',
+        'Placeholder_SL': dashboardData.schulleitung || '',
+        'SL_Titel': dashboardData.sl_titel || '',
+        'Placeholder_Klassenleitung': dashboardData.klassenleitung || '',
+        'KL_Titel': dashboardData.kl_titel || ''
       };
 
-      // Vorverarbeiten: Alle Werte als Strings
-      const processedData = Object.entries(data).reduce((acc, [key, value]) => {
-        acc[key] = value?.toString() || '';
-        return acc;
-      }, {});
+      // Ersetze alle Platzhalter global in der XML
+      Object.entries(mapping).forEach(([placeholder, value]) => {
+        const regex = new RegExp(escapeRegExp(placeholder), 'g');
+        xmlContent = xmlContent.replace(regex, value);
+      });
 
-      doc.setData(processedData);
-      doc.render();
+      // Speichere den bearbeiteten XML-Content zurück in das ZIP
+      zip.file(documentXmlPath, xmlContent);
 
-      const out = doc.getZip().generate({
+      const out = zip.generate({
         type: 'blob',
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       });
