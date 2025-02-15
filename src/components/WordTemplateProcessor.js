@@ -7,10 +7,10 @@ const escapeRegExp = (string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
-// Hilfsfunktion: Konvertiert Excel-Serial in ein Datum im deutschen Format (TT.MM.JJJJ)
+// Konvertiert Excel-Serial in ein Datum im deutschen Format (TT.MM.JJJJ)
 const formatExcelDate = (dateVal) => {
   if (typeof dateVal === 'number') {
-    // Excel-Serial (basierend auf dem 1900-Datumssystem)
+    // Excel verwendet üblicherweise das 1900-Datumssystem
     const utcDays = Math.floor(dateVal - 25569);
     const utcValue = utcDays * 86400; // Sekunden
     const date = new Date(utcValue * 1000);
@@ -19,7 +19,17 @@ const formatExcelDate = (dateVal) => {
     const year = date.getFullYear();
     return `${day}.${month}.${year}`;
   }
-  return dateVal; // Falls es bereits ein String ist
+  return dateVal;
+};
+
+// Konvertiert einen ISO-Datum-String (z. B. "2025-06-10") in das Format TT.MM.JJJJ
+const formatIsoDate = (isoStr) => {
+  if (!isoStr) return '';
+  const date = new Date(isoStr);
+  const day = ('0' + date.getDate()).slice(-2);
+  const month = ('0' + (date.getMonth() + 1)).slice(-2);
+  const year = date.getFullYear();
+  return `${day}.${month}.${year}`;
 };
 
 const WordTemplateProcessor = ({ excelData, dashboardData }) => {
@@ -35,8 +45,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
     return `${process.env.PUBLIC_URL}/template_jahr.docx`;
   };
 
-  // Reine Textersetzung: Für jede Excel-Zeile wird ein eigenes DOCX erzeugt.
-  // (Ein einzelnes Dokument mit mehreren Seiten würde Loop-Funktionalitäten erfordern.)
+  // Reine Textersetzung: Für jede Zeile in der Excel wird ein eigenes DOCX erzeugt.
   const generateDocx = async () => {
     setProcessing(true);
     try {
@@ -47,11 +56,10 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
       const arrayBuffer = await response.arrayBuffer();
 
-      // Für jede Zeile in der Excel wird ein eigenes Dokument erzeugt.
+      // Für jede Zeile in Excel (jeden Schüler) ein eigenes Dokument erzeugen:
       for (let i = 0; i < excelData.length; i++) {
         const student = excelData[i];
-
-        // Kopiere den ArrayBuffer, damit jede Zeile eine frische Vorlage hat.
+        // Kopiere den ArrayBuffer, damit jede Zeile eine frische Vorlage bekommt.
         const zip = new PizZip(arrayBuffer.slice(0));
 
         const documentXmlPath = 'word/document.xml';
@@ -60,23 +68,20 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         }
         let xmlContent = zip.file(documentXmlPath).asText();
 
-        // Mapping: Die Schlüssel müssen exakt mit den Platzhaltertexten in deinem Word-Template übereinstimmen.
-        // Hinweis:
-        // - Für den Klassenwert aus der Excel wird der Schlüssel "placeholderklasse" verwendet.
-        // - Für den Klassenwert aus dem Dashboard (global) wird der Schlüssel "placeholderkl" verwendet.
+        // Mapping: Beachte, dass die Keys exakt den Platzhaltertexten im Word-Dokument entsprechen müssen.
         const mapping = {
           // Dashboard (global):
           'placeholdersj': dashboardData.schuljahr || '',
           'placeholdersl': dashboardData.schulleitung || '',
           'sltitel': dashboardData.sl_titel || '',
           'kltitel': dashboardData.kl_titel || '',
-          'zeugnisdatum': dashboardData.datum || '',
+          'zeugnisdatum': formatIsoDate(dashboardData.datum) || '',
           'placeholderkl': dashboardData.KL || '',
 
           // Excel (pro Schüler):
           'placeholdervn': student.placeholdervn || '',
           'placeholdernm': student.placeholdernm || '',
-          // Excel-Spalte "placeholderkl" wird hier zu "placeholderklasse" im Template:
+          // Für den Excel-Wert der Klassenangabe: Der Platzhalter im Template lautet "placeholderklasse"
           'placeholderklasse': student.placeholderkl || '',
           'gdat': formatExcelDate(student.gdat) || '',
           'gort': student.gort || '',
@@ -102,24 +107,21 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           'buzwei': student.buzwei || ''
         };
 
-        // Ersetze alle Platzhalter im XML.
-        // Damit keine Überschneidungen (z. B. bei "f8" und "f8n") auftreten, sortieren wir nach Länge (längere Schlüssel zuerst).
+        // Um Überschneidungen zu vermeiden (z. B. "f8" und "f8n"), sortieren wir die Keys nach Länge (längere zuerst)
         const keys = Object.keys(mapping).sort((a, b) => b.length - a.length);
         keys.forEach((key) => {
           const regex = new RegExp(escapeRegExp(key), 'g');
           xmlContent = xmlContent.replace(regex, mapping[key]);
         });
 
-        // Schreibe den bearbeiteten XML-Inhalt zurück ins ZIP.
         zip.file(documentXmlPath, xmlContent);
 
-        // Generiere das finale DOCX als Blob.
         const out = zip.generate({
           type: 'blob',
           mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         });
 
-        // Speichere das Dokument, z. B. "zeugnis_Meyer_1.docx"
+        // Speichere das Dokument, z. B. "zeugnis_Meyer_1.docx"
         const filename = `zeugnis_${student.placeholdernm || 'unbekannt'}_${i + 1}.docx`;
         saveAs(out, filename);
       }
