@@ -185,10 +185,19 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         .replace(/<\?xml.*?\?>\n?/g, '')
         .replace(/^\uFEFF/, '')
         .trim();
-      // 2. Schließe fehlende </w:t>-Tags (verbesserte Regex)
+      // 2. Verbesserte Regex zum Schließen fehlender </w:t>-Tags:
+      //    Zuerst werden korrekt geschlossene <w:t> unverändert gelassen,
+      //    dann fehlende </w:t> ergänzt.
       newXmlContent = newXmlContent.replace(
-        /(<w:t\b[^>]*>)([^<]+)(?!<\/w:t>)/g,
-        '$1$2</w:t>'
+        /<w:t(\b[^>]*)>([^<]*)<\/w:t>/g,
+        (match, attrs, content) => {
+          return `<w:t${attrs}>${content}</w:t>`;
+        }
+      ).replace(
+        /<w:t(\b[^>]*)>([^<]*)(<\/w:t>)?/g,
+        (match, attrs, content, closingTag) => {
+          return closingTag ? match : `<w:t${attrs}>${content}</w:t>`;
+        }
       );
       // 3. Entferne alle xmlns:w-Deklarationen restlos
       newXmlContent = newXmlContent.replace(/xmlns:w="[^"]*"/g, '');
