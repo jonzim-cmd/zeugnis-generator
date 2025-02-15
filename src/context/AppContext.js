@@ -1,6 +1,6 @@
+// src/context/AppContext.js
 import React, { createContext, useState } from 'react';
 
-// Der zentrale State-Context für Excel-Daten und Dashboard-Eingaben
 export const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
@@ -10,7 +10,7 @@ export const AppProvider = ({ children }) => {
     schulleitung: '',
     schuljahr: '',
     datum: '',
-    zeugnisart: 'Jahreszeugnis' // Standardwert
+    zeugnisart: 'Jahreszeugnis'  // Optionen: "Zwischenzeugnis", "Jahreszeugnis", "Abschlusszeugnis"
   });
 
   return (
