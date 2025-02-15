@@ -2,6 +2,7 @@
   "name": "zeugnis-generator",
   "version": "1.0.0",
   "private": true,
+  "homepage": "https://jonzim-cmd.github.io/zeugnis-generator",
   "dependencies": {
     "@mui/icons-material": "^5.11.0",
     "@mui/material": "^5.11.0",
@@ -12,8 +13,13 @@
     "react-scripts": "5.0.1",
     "xlsx": "^0.18.5"
   },
+  "devDependencies": {
+    "gh-pages": "^5.0.0"
+  },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build"
+    "build": "react-scripts build",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
   }
 }
