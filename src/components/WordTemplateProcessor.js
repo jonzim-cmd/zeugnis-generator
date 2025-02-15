@@ -142,7 +142,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           mapping[key] = safeValue;
         });
 
-        // Zuerst spezifische Platzhalter ersetzen
+        // Ersetze zuerst spezifische Platzhalter
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderklasse'), 'g'),
           mapping['placeholderklasse'] || ''
@@ -160,9 +160,9 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // Füge einen robusten Seitenumbruch ein – mit expliziter Namespace-Deklaration
+        // Füge einen robusten Seitenumbruch ein (ohne redundante Namespace-Deklaration)
         const pageBreak = `
-          <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:p>
             <w:r>
               <w:br w:type="page"/>
             </w:r>
@@ -186,8 +186,10 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       newXmlContent = newXmlContent.replace(/<w:t([^>]*)>([^<]*)/g, '<w:t$1>$2</w:t>');
       // Entferne alle vorhandenen xmlns:w-Deklarationen und füge sie einmalig im Root-Tag ein
       newXmlContent = newXmlContent
-        .replace(/xmlns:w="[^"]*"/g, '')
+        .replace(/\s+xmlns:w="[^"]*"/g, '')
         .replace(/<w:document/, '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"');
+      // Füge einen XML-Header hinzu
+      newXmlContent = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + newXmlContent;
 
       // --- 5. XML-Validierung ---
       const parser = new DOMParser();
