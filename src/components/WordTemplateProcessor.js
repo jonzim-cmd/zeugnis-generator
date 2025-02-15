@@ -2,22 +2,29 @@ import React, { useState } from 'react';
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
 
-// Hilfsfunktion, um Regex-Sonderzeichen zu escapen.
-// So können wir Platzhalternamen sicher in RegExps verwenden.
+// Hilfsfunktion: Escapen von Regex-Sonderzeichen
 const escapeRegExp = (string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
-/*
-  WordTemplateProcessor:
-  - Bekommt jetzt "excelData" als Array (alle Zeilen aus der Excel)
-  - Für jede Zeile wird ein eigenes Word-Dokument erzeugt.
-  - "dashboardData" enthält die Angaben aus dem Dashboard.
-*/
+// Hilfsfunktion: Konvertiert Excel-Serial in ein Datum im deutschen Format (TT.MM.JJJJ)
+const formatExcelDate = (dateVal) => {
+  if (typeof dateVal === 'number') {
+    // Excel-Serial (basierend auf dem 1900-Datumssystem)
+    const utcDays = Math.floor(dateVal - 25569);
+    const utcValue = utcDays * 86400; // Sekunden
+    const date = new Date(utcValue * 1000);
+    const day = ('0' + date.getDate()).slice(-2);
+    const month = ('0' + (date.getMonth() + 1)).slice(-2);
+    const year = date.getFullYear();
+    return `${day}.${month}.${year}`;
+  }
+  return dateVal; // Falls es bereits ein String ist
+};
+
 const WordTemplateProcessor = ({ excelData, dashboardData }) => {
   const [processing, setProcessing] = useState(false);
 
-  // Wähle das richtige DOCX-Template anhand der Zeugnisart.
   const getTemplateFileName = () => {
     const art = dashboardData.zeugnisart || '';
     if (art === 'Zwischenzeugnis') {
@@ -25,10 +32,11 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
     } else if (art === 'Abschlusszeugnis') {
       return `${process.env.PUBLIC_URL}/template_abschluss.docx`;
     }
-    // Standard: Jahreszeugnis
     return `${process.env.PUBLIC_URL}/template_jahr.docx`;
   };
 
+  // Reine Textersetzung: Für jede Excel-Zeile wird ein eigenes DOCX erzeugt.
+  // (Ein einzelnes Dokument mit mehreren Seiten würde Loop-Funktionalitäten erfordern.)
   const generateDocx = async () => {
     setProcessing(true);
     try {
@@ -43,73 +51,77 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       for (let i = 0; i < excelData.length; i++) {
         const student = excelData[i];
 
-        // Kopiere das ArrayBuffer, damit wir pro Zeile eine frische Vorlage haben.
+        // Kopiere den ArrayBuffer, damit jede Zeile eine frische Vorlage hat.
         const zip = new PizZip(arrayBuffer.slice(0));
 
-        // Hauptdokument laden
         const documentXmlPath = 'word/document.xml';
         if (!zip.file(documentXmlPath)) {
           throw new Error('Dokumentstruktur ungültig: word/document.xml nicht gefunden');
         }
         let xmlContent = zip.file(documentXmlPath).asText();
 
-        // Definiere das Mapping (Platzhalter -> Wert).
-        // Achte darauf, dass die Platzhalternamen exakt mit denen im Word-Dokument übereinstimmen!
+        // Mapping: Die Schlüssel müssen exakt mit den Platzhaltertexten in deinem Word-Template übereinstimmen.
+        // Hinweis:
+        // - Für den Klassenwert aus der Excel wird der Schlüssel "placeholderklasse" verwendet.
+        // - Für den Klassenwert aus dem Dashboard (global) wird der Schlüssel "placeholderkl" verwendet.
         const mapping = {
-          // Aus dem Dashboard
-          'Placeholder_SJ': dashboardData.schuljahr || '',
-          'Placeholder_KL': dashboardData.KL || '',
-          'Placeholder_SL': dashboardData.schulleitung || '',
-          'SL_Titel': dashboardData.sl_titel || '',
-          'Placeholder_Klassenleitung': dashboardData.klassenleitung || '',
-          'KL_Titel': dashboardData.kl_titel || '',
-          'Zeugnisdatum': dashboardData.datum || '',
+          // Dashboard (global):
+          'placeholdersj': dashboardData.schuljahr || '',
+          'placeholdersl': dashboardData.schulleitung || '',
+          'sltitel': dashboardData.sl_titel || '',
+          'kltitel': dashboardData.kl_titel || '',
+          'zeugnisdatum': dashboardData.datum || '',
+          'placeholderkl': dashboardData.KL || '',
 
-          // Aus der Excel (student)
-          'Placeholder_Vorname': student.Vorname || '',
-          'Placeholder_Nachname': student.Nachname || '',
-          'GDat': student.GDat || '',
-          'GOrt': student.GOrt || '',
-          'F1': student.F1 || '',
-          'F2': student.F2 || '',
-          'F3': student.F3 || '',
-          'F4': student.F4 || '',
-          'F5': student.F5 || '',
-          'F6': student.F6 || '',
-          'F7': student.F7 || '',
-          'F8': student.F8 || '',
-          'F9': student.F9 || '',
-          'F1_N': student.F1_N || '',
-          'F2_N': student.F2_N || '',
-          'F3_N': student.F3_N || '',
-          'F4_N': student.F4_N || '',
-          'F5_N': student.F5_N || '',
-          'F6_N': student.F6_N || '',
-          'F7_N': student.F7_N || '',
-          'F8_N': student.F8_N || '',
-          'F9_N': student.F9_N || '',
-          'BU': student.BU || '',
-          'BU2': student.BU2 || ''
+          // Excel (pro Schüler):
+          'placeholdervn': student.placeholdervn || '',
+          'placeholdernm': student.placeholdernm || '',
+          // Excel-Spalte "placeholderkl" wird hier zu "placeholderklasse" im Template:
+          'placeholderklasse': student.placeholderkl || '',
+          'gdat': formatExcelDate(student.gdat) || '',
+          'gort': student.gort || '',
+          'f1': student.f1 || '',
+          'f1n': student.f1n || '',
+          'f2': student.f2 || '',
+          'f2n': student.f2n || '',
+          'f3': student.f3 || '',
+          'f3n': student.f3n || '',
+          'f4': student.f4 || '',
+          'f4n': student.f4n || '',
+          'f5': student.f5 || '',
+          'f5n': student.f5n || '',
+          'f6': student.f6 || '',
+          'f6n': student.f6n || '',
+          'f7': student.f7 || '',
+          'f7n': student.f7n || '',
+          'f8': student.f8 || '',
+          'f8n': student.f8n || '',
+          'f9': student.f9 || '',
+          'f9n': student.f9n || '',
+          'bueins': student.bueins || '',
+          'buzwei': student.buzwei || ''
         };
 
         // Ersetze alle Platzhalter im XML.
-        for (const [placeholder, value] of Object.entries(mapping)) {
-          const regex = new RegExp(escapeRegExp(placeholder), 'g');
-          xmlContent = xmlContent.replace(regex, value);
-        }
+        // Damit keine Überschneidungen (z. B. bei "f8" und "f8n") auftreten, sortieren wir nach Länge (längere Schlüssel zuerst).
+        const keys = Object.keys(mapping).sort((a, b) => b.length - a.length);
+        keys.forEach((key) => {
+          const regex = new RegExp(escapeRegExp(key), 'g');
+          xmlContent = xmlContent.replace(regex, mapping[key]);
+        });
 
-        // Speichere den aktualisierten Inhalt zurück ins ZIP
+        // Schreibe den bearbeiteten XML-Inhalt zurück ins ZIP.
         zip.file(documentXmlPath, xmlContent);
 
-        // Erzeuge das finale DOCX als Blob
+        // Generiere das finale DOCX als Blob.
         const out = zip.generate({
           type: 'blob',
           mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         });
 
-        // Lade das Dokument herunter; z.B. "zeugnis_Meyer_1.docx"
-        const dateiname = `zeugnis_${student.Nachname || 'unbekannt'}_${i + 1}.docx`;
-        saveAs(out, dateiname);
+        // Speichere das Dokument, z. B. "zeugnis_Meyer_1.docx"
+        const filename = `zeugnis_${student.placeholdernm || 'unbekannt'}_${i + 1}.docx`;
+        saveAs(out, filename);
       }
     } catch (error) {
       console.error('Fehler beim Generieren der Word-Datei:', error);
