@@ -45,7 +45,8 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
     return `${process.env.PUBLIC_URL}/template_jahr.docx`;
   };
 
-  // Reine Textersetzung: Für jede Zeile in der Excel wird ein eigenes DOCX erzeugt.
+  // Für jede Excelzeile wird nun nicht mehr ein eigenes Dokument erstellt, sondern
+  // ein einziger Dokumenteninhalt mit mehrfach dupliziertem Schülerbereich erzeugt.
   const generateDocx = async () => {
     setProcessing(true);
     try {
@@ -56,33 +57,42 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
       const arrayBuffer = await response.arrayBuffer();
 
-      // Für jede Zeile in Excel (jeden Schüler) ein eigenes Dokument erzeugen:
+      // Erstelle ein neues Zip-Objekt aus dem ArrayBuffer
+      const zip = new PizZip(arrayBuffer);
+      const documentXmlPath = 'word/document.xml';
+      if (!zip.file(documentXmlPath)) {
+        throw new Error('Dokumentstruktur ungültig: word/document.xml nicht gefunden');
+      }
+      let xmlContent = zip.file(documentXmlPath).asText();
+
+      // Suche nach den STUDENT_SECTION Markern
+      const startMarker = '<!-- STUDENT_SECTION_START -->';
+      const endMarker = '<!-- STUDENT_SECTION_END -->';
+      const startIndex = xmlContent.indexOf(startMarker);
+      const endIndex = xmlContent.indexOf(endMarker);
+      if (startIndex === -1 || endIndex === -1) {
+        throw new Error('Student section markers nicht gefunden');
+      }
+
+      // Teile das Dokument in drei Bereiche: Vor dem Wiederholungsbereich, der wiederholbare Bereich, und danach
+      const beforeSection = xmlContent.substring(0, startIndex + startMarker.length);
+      const studentSectionTemplate = xmlContent.substring(startIndex + startMarker.length, endIndex);
+      const afterSection = xmlContent.substring(endIndex);
+
+      // Erzeuge den neuen Inhalt, indem du für jede Excelzeile den wiederholbaren Abschnitt kopierst
+      let newStudentSections = "";
       for (let i = 0; i < excelData.length; i++) {
         const student = excelData[i];
-        // Kopiere den ArrayBuffer, damit jede Zeile eine frische Vorlage bekommt.
-        const zip = new PizZip(arrayBuffer.slice(0));
-
-        const documentXmlPath = 'word/document.xml';
-        if (!zip.file(documentXmlPath)) {
-          throw new Error('Dokumentstruktur ungültig: word/document.xml nicht gefunden');
-        }
-        let xmlContent = zip.file(documentXmlPath).asText();
-
-        // Mapping: Die Keys müssen exakt den Platzhaltertexten in deinem Word-Dokument entsprechen.
-        // Dashboard-Daten:
+        // Mapping: Dashboard- und Excel-Daten
         const mapping = {
           'placeholdersj': dashboardData.schuljahr || '',
           'placeholdersl': dashboardData.schulleitung || '',
           'sltitel': dashboardData.sl_titel || '',
           'kltitel': dashboardData.kl_titel || '',
           'zeugnisdatum': formatIsoDate(dashboardData.datum) || '',
-          // Dashboard-Wert für Klassenleitung:
           'placeholderkl': dashboardData.klassenleitung || '',
-
-          // Excel-Daten:
           'placeholdervn': student.placeholdervn || '',
           'placeholdernm': student.placeholdernm || '',
-          // Hier verwenden wir den Excel-Wert aus der Spalte "KL":
           'placeholderklasse': student.KL || '',
           'gdat': formatExcelDate(student.gdat) || '',
           'gort': student.gort || '',
@@ -108,32 +118,34 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           'buzwei': student.buzwei || ''
         };
 
-        // Ersetze zuerst den Excel-Klassenplatzhalter ("placeholderklasse")
-        const regexExcelKl = new RegExp(escapeRegExp('placeholderklasse'), 'g');
-        xmlContent = xmlContent.replace(regexExcelKl, mapping['placeholderklasse']);
-        // Ersetze danach den Dashboard-Wert für Klassenleitung ("placeholderkl")
-        const regexDashKl = new RegExp(escapeRegExp('placeholderkl'), 'g');
-        xmlContent = xmlContent.replace(regexDashKl, mapping['placeholderkl']);
+        // Ersetze zuerst "placeholderklasse" und "placeholderkl"
+        let studentSection = studentSectionTemplate;
+        studentSection = studentSection.replace(new RegExp(escapeRegExp('placeholderklasse'), 'g'), mapping['placeholderklasse']);
+        studentSection = studentSection.replace(new RegExp(escapeRegExp('placeholderkl'), 'g'), mapping['placeholderkl']);
 
-        // Um Überschneidungen zu vermeiden (z. B. "f8" und "f8n"), sortieren wir die übrigen Keys nach Länge (längere zuerst)
-        const keys = Object.keys(mapping)
-          .filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl')
-          .sort((a, b) => b.length - a.length);
+        // Ersetze anschließend alle übrigen Platzhalter – sortiert nach Länge, damit längere Namen zuerst ersetzt werden
+        const keys = Object.keys(mapping).filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl').sort((a, b) => b.length - a.length);
         keys.forEach((key) => {
           const regex = new RegExp(escapeRegExp(key), 'g');
-          xmlContent = xmlContent.replace(regex, mapping[key]);
+          studentSection = studentSection.replace(regex, mapping[key]);
         });
 
-        zip.file(documentXmlPath, xmlContent);
-
-        const out = zip.generate({
-          type: 'blob',
-          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        });
-
-        const filename = `zeugnis_${student.placeholdernm || 'unbekannt'}_${i + 1}.docx`;
-        saveAs(out, filename);
+        // Füge diesen Schülerabschnitt hinzu.
+        // Falls in deinem Template bereits ein Seitenumbruch im Student-Block enthalten ist, wird dieser übernommen.
+        newStudentSections += studentSection;
       }
+
+      // Erzeuge den finalen XML-Inhalt, indem du den wiederholten Bereich einsetzt.
+      const finalXml = beforeSection + newStudentSections + afterSection;
+      zip.file(documentXmlPath, finalXml);
+
+      const out = zip.generate({
+        type: 'blob',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      });
+
+      // Da nun alle Schüler in einem Dokument enthalten sind, vergeben wir einen generischen Namen.
+      saveAs(out, 'zeugnisse_gesamt.docx');
     } catch (error) {
       console.error('Fehler beim Generieren der Word-Datei:', error);
       alert(`Fehler bei der Generierung: ${error.message || 'Unbekannter Fehler'}`);
