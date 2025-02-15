@@ -31,25 +31,24 @@ const WordTemplateProcessor = ({ student }) => {
       // Erstelle ein ZIP-Objekt aus dem ArrayBuffer.
       let zip = new PizZip(arrayBuffer);
 
-      // Durchlaufe alle .xml-Dateien und ersetze alle <<...>> durch {{...}}
-      const xmlFiles = Object.keys(zip.files).filter((fileName) =>
-        fileName.endsWith('.xml')
-      );
-      xmlFiles.forEach((fileName) => {
-        let xmlContent = zip.file(fileName).asText();
+      // Nur in der Hauptdokument-Datei (word/document.xml)
+      const documentXmlPath = 'word/document.xml';
+      if (zip.file(documentXmlPath)) {
+        let xmlContent = zip.file(documentXmlPath).asText();
+        // Ersetze alle <<...>> durch {{...}}
         xmlContent = xmlContent.replace(/<<([^>]+)>>/g, '{{$1}}');
-        zip.file(fileName, xmlContent);
-      });
+        zip.file(documentXmlPath, xmlContent);
+      } else {
+        console.warn('word/document.xml nicht gefunden');
+      }
 
       // Lade Docxtemplater mit dem aktualisierten ZIP.
       const doc = new Docxtemplater();
       doc.loadZip(zip);
 
-      // Konfiguriere den nullGetter, damit fehlende Platzhalter durch einen leeren String ersetzt werden.
+      // Konfiguriere den nullGetter, um fehlende Werte durch einen leeren String zu ersetzen.
       doc.setOptions({
-        nullGetter: (part) => {
-          return '';
-        }
+        nullGetter: (part) => ''
       });
 
       // Füge Daten aus Excel (student) und Dashboard zusammen.
@@ -57,14 +56,11 @@ const WordTemplateProcessor = ({ student }) => {
         ...student,
         ...dashboardData,
         Zeugnisdatum: dashboardData.datum
-        // Falls du im Template z. B. auch {{SJ}} nutzt, kannst du hier ergänzen:
-        // SJ: dashboardData.schuljahr
       };
 
       doc.setData(data);
       doc.render();
 
-      // Erzeuge die finale DOCX als Blob und starte den Download.
       const out = doc.getZip().generate({
         type: 'blob',
         mimeType:
