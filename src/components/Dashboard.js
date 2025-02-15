@@ -2,12 +2,6 @@ import React, { useContext } from 'react';
 import { TextField, MenuItem, Grid, Typography } from '@mui/material';
 import { AppContext } from '../context/AppContext';
 
-/*
-  Dashboard-Komponente:
-  - Bietet Eingabefelder für zusätzliche Daten:
-    Klassenleitung, Schulleitung, Schuljahr, Datum und Zeugnisart.
-  - Aktualisiert den globalen State entsprechend.
-*/
 const Dashboard = () => {
   const { dashboardData, setDashboardData } = useContext(AppContext);
 
@@ -41,6 +35,15 @@ const Dashboard = () => {
         </Grid>
         <Grid item xs={12} sm={6}>
           <TextField
+            label="Funktionsbezeichnung (Schulleitung & Klassenleitung)"
+            name="sl_titel"
+            value={dashboardData.sl_titel}
+            onChange={handleChange}
+            fullWidth
+          />
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <TextField
             label="Schuljahr"
             name="schuljahr"
             value={dashboardData.schuljahr}
@@ -50,7 +53,7 @@ const Dashboard = () => {
         </Grid>
         <Grid item xs={12} sm={6}>
           <TextField
-            label="Datum"
+            label="Zeugnisdatum"
             name="datum"
             type="date"
             value={dashboardData.datum}
