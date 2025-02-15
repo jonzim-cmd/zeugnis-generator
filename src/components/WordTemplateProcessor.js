@@ -7,13 +7,27 @@ import { saveAs } from 'file-saver';
 const WordTemplateProcessor = ({ student, dashboardData }) => {
   const [processing, setProcessing] = useState(false);
 
+  // Wähle das richtige Template basierend auf der Zeugnisart
+  const getTemplateFileName = () => {
+    const art = dashboardData.zeugnisart || '';
+    if (art === 'Zwischenzeugnis') {
+      return '/template_zwischen.docx';
+    } else if (art === 'Abschlusszeugnis') {
+      return '/template_abschluss.docx';
+    }
+    // Standard: Jahreszeugnis
+    return '/template_jahr.docx';
+  };
+
   const generateDocx = async () => {
     setProcessing(true);
     try {
-      // Lade die DOCX-Vorlage aus dem public-Ordner (Dateiname: template.docx)
-      const response = await fetch('/template.docx');
+      // Hole den Dateinamen für das gewählte Template
+      const templateFile = getTemplateFileName();
+      // Lade die DOCX-Vorlage aus dem public-Ordner
+      const response = await fetch(templateFile);
       if (!response.ok) {
-        throw new Error('Template file not found');
+        throw new Error(`Template file not found: ${templateFile}`);
       }
       const arrayBuffer = await response.arrayBuffer();
 
@@ -26,8 +40,8 @@ const WordTemplateProcessor = ({ student, dashboardData }) => {
         linebreaks: true,
       });
 
-      // Bereite die Daten vor, um die Platzhalter in der DOCX zu ersetzen
-      // Stelle sicher, dass die Platzhalternamen in deiner DOCX (z.B. {{SJ}}, {{Kl}}, etc.) mit diesen Schlüsseln übereinstimmen
+      // Bereite die Daten vor, um die Platzhalter in der DOCX zu ersetzen.
+      // Stelle sicher, dass in deiner DOCX-Datei dieselben Platzhalternamen (z. B. {{SJ}}, {{Kl}}, etc.) verwendet werden.
       const data = {
         SJ: dashboardData.schuljahr || '',
         Kl: student.Klasse || '',
@@ -35,7 +49,7 @@ const WordTemplateProcessor = ({ student, dashboardData }) => {
         Nachname: student.Nachname || '',
         GDat: student.Geburtsdatum || '',
         GOrt: student.Geburtsort || ''
-        // Füge hier weitere Platzhalter hinzu, falls nötig
+        // Füge weitere Platzhalter hinzu, falls benötigt.
       };
 
       // Setze die Daten in das Template
