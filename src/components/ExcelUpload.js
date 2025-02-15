@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import { Button, Typography } from '@mui/material';
+import { Typography } from '@mui/material';
 import * as XLSX from 'xlsx';
 import { AppContext } from '../context/AppContext';
 
@@ -17,12 +17,21 @@ const ExcelUpload = () => {
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+      
       setExcelData(jsonData);
 
-      // Falls im ersten Datensatz "Zeugnisart" den Wert "ZZ" hat,
-      // wird im Dashboard die Auswahl auf "Zwischenzeugnis" voreingestellt.
-      if (jsonData.length > 0 && jsonData[0].Zeugnisart === "ZZ") {
-        setDashboardData(prev => ({ ...prev, zeugnisart: "Zwischenzeugnis" }));
+      if (jsonData.length > 0) {
+        const zeugnisartMapping = {
+          'ZZ': 'Zwischenzeugnis',
+          'JZ': 'Jahreszeugnis',
+          'AZ': 'Abschlusszeugnis'
+        };
+        
+        setDashboardData(prev => ({
+          ...prev,
+          zeugnisart: zeugnisartMapping[jsonData[0].Zeugnisart] || 'Jahreszeugnis',
+          KL: jsonData[0].KL
+        }));
       }
     };
     reader.readAsBinaryString(file);
@@ -40,7 +49,7 @@ const ExcelUpload = () => {
         style={{ marginBottom: '20px' }}
       />
       <Typography variant="body2" color="textSecondary">
-        Bitte stellen Sie sicher, dass die Excel-Datei folgende Spalten enthält: Klasse, Vorname, Nachname, Geburtsdatum, Geburtsort, Fächer, Noten der Fächer, Zeugnisbemerkung 1 und Zeugnisbemerkung 2.
+        Bitte stellen Sie sicher, dass die Excel-Datei die korrekten Spalten gemäß der Vorlage enthält.
       </Typography>
     </div>
   );
