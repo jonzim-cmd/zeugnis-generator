@@ -31,7 +31,7 @@ const WordTemplateProcessor = ({ student }) => {
       // Erstelle ein ZIP-Objekt aus dem ArrayBuffer.
       let zip = new PizZip(arrayBuffer);
 
-      // Durchlaufe alle .xml-Dateien und ersetze <<...>> durch {{...}}
+      // Durchlaufe alle .xml-Dateien und ersetze alle <<...>> durch {{...}}
       const xmlFiles = Object.keys(zip.files).filter((fileName) =>
         fileName.endsWith('.xml')
       );
@@ -41,20 +41,26 @@ const WordTemplateProcessor = ({ student }) => {
         zip.file(fileName, xmlContent);
       });
 
-      // Lade docxtemplater mit dem aktualisierten ZIP.
+      // Lade Docxtemplater mit dem aktualisierten ZIP.
       const doc = new Docxtemplater();
       doc.loadZip(zip);
+
+      // Konfiguriere den nullGetter, damit fehlende Platzhalter durch einen leeren String ersetzt werden.
+      doc.setOptions({
+        nullGetter: (part) => {
+          return '';
+        }
+      });
 
       // Füge Daten aus Excel (student) und Dashboard zusammen.
       const data = {
         ...student,
         ...dashboardData,
         Zeugnisdatum: dashboardData.datum
-        // Falls du z.B. im Template auch {{SJ}} nutzt, kannst du hier ergänzen:
+        // Falls du im Template z. B. auch {{SJ}} nutzt, kannst du hier ergänzen:
         // SJ: dashboardData.schuljahr
       };
 
-      // Setze die Daten und rendere das Template.
       doc.setData(data);
       doc.render();
 
