@@ -1,4 +1,3 @@
-// src/App.js
 import React, { useContext, useState } from 'react';
 import { Container, Typography, Stepper, Step, StepLabel, Box, Button } from '@mui/material';
 import ExcelUpload from './components/ExcelUpload';
@@ -41,7 +40,12 @@ function App() {
         {activeStep === 2 && (
           <div>
             {excelData.length > 0 ? (
-              <WordTemplateProcessor student={excelData[0]} dashboardData={dashboardData} />
+              /*
+                Wir übergeben jetzt das gesamte excelData-Array
+                und nicht nur excelData[0].
+                So kann WordTemplateProcessor pro Zeile ein Dokument erzeugen.
+              */
+              <WordTemplateProcessor excelData={excelData} dashboardData={dashboardData} />
             ) : (
               <Typography variant="body1">Keine Daten verfügbar.</Typography>
             )}
