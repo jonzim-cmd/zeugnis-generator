@@ -35,9 +35,18 @@ const Dashboard = () => {
         </Grid>
         <Grid item xs={12} sm={6}>
           <TextField
-            label="Funktionsbezeichnung (Schulleitung & Klassenleitung)"
+            label="Funktionsbezeichnung Schulleitung"
             name="sl_titel"
             value={dashboardData.sl_titel}
+            onChange={handleChange}
+            fullWidth
+          />
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            label="Funktionsbezeichnung Klassenleitung"
+            name="kl_titel"
+            value={dashboardData.kl_titel}
             onChange={handleChange}
             fullWidth
           />
