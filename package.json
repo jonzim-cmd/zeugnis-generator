@@ -19,7 +19,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "prebuild": "mkdir -p ~/.ssh && echo \"$SSH_PRIVATE_KEY_TEMPLATE\" > ~/.ssh/id_ed25519_template && chmod 600 ~/.ssh/id_ed25519_template",
+    "prebuild": "mkdir -p ~/.ssh && echo \"$SSH_PRIVATE_KEY_TEMPLATE\" > ~/.ssh/id_ed25519_template && chmod 600 ~/.ssh/id_ed25519_template && ls -la ~/.ssh",
     "build": "GIT_SSH_COMMAND='ssh -i ~/.ssh/id_ed25519_template -o StrictHostKeyChecking=no' react-scripts build",
     "postbuild": "rm -rf docs && mkdir -p docs && cp -r build/* docs/ && touch docs/.nojekyll",
     "deploy": "git stash push --include-untracked || true && npm run build && git add docs && git commit -m \"Update docs folder\" && git pull --rebase --autostash && git push && git stash pop || true"
