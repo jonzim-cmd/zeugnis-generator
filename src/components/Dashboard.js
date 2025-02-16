@@ -28,9 +28,14 @@ const Dashboard = () => {
   return (
     <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
       <Paper elevation={3} sx={{ p: 3 }}>
-        <Typography variant="h4" align="center" gutterBottom>
-          Zeugnis Generator
-        </Typography>
+        <Typography 
+          variant="h4" 
+          align="center" 
+          gutterBottom 
+          sx={{ fontWeight: 'bold' }}
+        >
+          Zeugnisgenerator
+        </Typography>>
 
         {/* Section: Excel Upload */}
         <Box sx={{ mt: 3, p: 2, backgroundColor: '#e3f2fd', borderRadius: 1 }}>
