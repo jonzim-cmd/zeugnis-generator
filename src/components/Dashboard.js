@@ -1,14 +1,12 @@
 import React, { useContext, useState } from 'react';
 import { Container, Grid, Typography, Paper, Box, Divider } from '@mui/material';
 import { AppContext } from '../context/AppContext';
-import ExcelUpload from './ExcelUpload'; // Excel-Upload-Komponente
-import TemplateImport from './TemplateImport'; // Word-Template Upload
+import TemplateImport from './TemplateImport';
 import WordTemplateProcessor from './WordTemplateProcessor';
 
 const Dashboard = () => {
   const { dashboardData, setDashboardData } = useContext(AppContext);
   const [customTemplate, setCustomTemplate] = useState(null);
-  const [excelData, setExcelData] = useState([]); // Excel-Daten werden hier gesammelt
 
   const handleChange = (e) => {
     setDashboardData({ ...dashboardData, [e.target.name]: e.target.value });
@@ -117,7 +115,7 @@ const Dashboard = () => {
                 style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12}>
               <Typography variant="subtitle1">Zeugnisart</Typography>
               <select
                 name="zeugnisart"
@@ -136,36 +134,20 @@ const Dashboard = () => {
 
         <Divider sx={{ my: 3 }} />
 
-        {/* Section 2: Uploads (Excel und Word Template) */}
+        {/* Section 2: Upload & Generierung */}
         <Box sx={{ mt: 3 }}>
           <Typography variant="h6" gutterBottom>
-            Uploads
+            Word-Template Upload & Dokumentgenerierung
           </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
-              <Typography variant="subtitle1" gutterBottom>
-                Excel-Datei hochladen
-              </Typography>
-              <ExcelUpload setExcelData={setExcelData} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Typography variant="subtitle1" gutterBottom>
-                Word-Template hochladen
-              </Typography>
-              <TemplateImport onTemplateLoaded={setCustomTemplate} />
-            </Grid>
-          </Grid>
-        </Box>
-
-        <Divider sx={{ my: 3 }} />
-
-        {/* Section 3: Word-Dokument generieren */}
-        <Box sx={{ mt: 3, textAlign: 'center' }}>
-          <WordTemplateProcessor
-            excelData={excelData}
-            dashboardData={dashboardData}
-            customTemplate={customTemplate}
-          />
+          <TemplateImport onTemplateLoaded={setCustomTemplate} />
+          <Box sx={{ mt: 2 }}>
+            {/* Hier übergeben wir ein Dummy-Datensatz-Array (eine leeres Objekt) an WordTemplateProcessor */}
+            <WordTemplateProcessor
+              dashboardData={dashboardData}
+              customTemplate={customTemplate}
+              excelData={[{ KL: '', gdat: '' }]}
+            />
+          </Box>
         </Box>
       </Paper>
     </Container>
