@@ -90,8 +90,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       // Extrahiere den Body-Inhalt (das Zeugnis-Template)
       let studentTemplate = xmlContent.substring(bodyStartIndex + bodyStartTag.length, bodyEndIndex).trim();
 
-      // Entferne gegebenenfalls den <w:sectPr>-Block am Ende (Sektionseinstellungen),
-      // damit er nicht mehrfach eingefügt wird. Er wird am Ende des gesamten Dokuments angehängt.
+      // Entferne gegebenenfalls den <w:sectPr>-Block am Ende, damit er nicht mehrfach eingefügt wird.
       let sectPr = '';
       const sectPrIndex = studentTemplate.lastIndexOf('<w:sectPr');
       if (sectPrIndex !== -1) {
@@ -101,7 +100,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
 
       // --- Erzeuge für jeden Schüler einen Abschnitt ---
       let allStudentSections = "";
-      // Falls excelData kein Array ist, packe es in ein Array
       if (!Array.isArray(excelData)) {
         excelData = [excelData];
       }
@@ -145,21 +143,22 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // Füge zwischen den Schülerabschnitten einen Seitenumbruch ein (außer beim letzten)
-        if (i < excelData.length - 1) {
-          studentSection += `
-            <w:p>
-              <w:r>
-                <w:br w:type="page"/>
-              </w:r>
-            </w:p>
-          `;
+        // **Neuer Feinschliff:** Seitenumbruch direkt nach der Textmarke "Studen End" einfügen.
+        const marker = "Studen End";
+        const pageBreak = `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+        if (studentSection.indexOf(marker) !== -1) {
+          // Füge den Seitenumbruch direkt nach dem Marker ein
+          studentSection = studentSection.replace(marker, marker + pageBreak);
+        } else if (i < excelData.length - 1) {
+          // Fallback: falls der Marker nicht gefunden wird, hänge den Seitenumbruch an
+          studentSection += pageBreak;
         }
+        
         allStudentSections += studentSection;
       });
 
       // Hänge zum Ende der zusammengesetzten Schülerabschnitte einmalig den <w:sectPr>-Block an,
-      // damit die Sektionseinstellungen (z. B. Seitenränder) erhalten bleiben.
+      // damit die Sektionseinstellungen erhalten bleiben.
       const newBodyContent = allStudentSections + sectPr;
 
       // Füge den neuen Body wieder in das komplette Dokument ein
