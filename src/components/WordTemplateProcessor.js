@@ -43,7 +43,7 @@ const formatIsoDate = (isoStr) => {
   return `${day}.${month}.${year}`;
 };
 
-const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => {
+const WordTemplateProcessor = ({ dashboardData, customTemplate, excelData }) => {
   const [processing, setProcessing] = useState(false);
 
   // Bestimme anhand der Zeugnisart das Standard-Template
@@ -105,14 +105,13 @@ const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => 
         studentTemplate = studentTemplate.substring(0, sectPrIndex);
       }
 
-      // --- Erzeuge für jeden Schüler einen Abschnitt ---
+      // --- Erzeuge für jeden "Schüler" einen Abschnitt ---
       let allStudentSections = "";
-      if (!Array.isArray(excelData)) {
-        excelData = [excelData];
-      }
-      excelData.forEach((student, i) => {
+      // Da kein Excel-Upload mehr erfolgt, verwenden wir ein Dummy-Datensatz
+      const dataArray = Array.isArray(excelData) && excelData.length > 0 ? excelData : [{ KL: '', gdat: '' }];
+      dataArray.forEach((student, i) => {
         let studentSection = studentTemplate;
-        // Mapping aus Dashboard-Daten und Excel-Daten
+        // Mapping aus Dashboard-Daten und Dummy-Daten
         const mapping = {
           'placeholdersj': escapeXml(dashboardData.schuljahr || ''),
           'placeholdersl': escapeXml(dashboardData.schulleitung || ''),
@@ -120,16 +119,10 @@ const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => 
           'kltitel': escapeXml(dashboardData.kl_titel || ''),
           'zeugnisdatum': escapeXml(formatIsoDate(dashboardData.datum) || ''),
           'placeholderkl': escapeXml(dashboardData.klassenleitung || ''),
-          // Excel-spezifisch:
+          // Dummy-spezifisch:
           'placeholderklasse': escapeXml(student.KL || ''),
           'gdat': escapeXml(formatExcelDate(student.gdat) || '')
         };
-
-        // Ergänze weitere Excel-Werte, ohne die oben definierten Keys zu überschreiben
-        Object.entries(student).forEach(([key, value]) => {
-          if (['KL', 'gdat'].includes(key)) return;
-          mapping[key] = escapeXml(value);
-        });
 
         // Ersetze zuerst den Excel-Platzhalter "placeholderklasse"
         studentSection = studentSection.replace(
@@ -150,25 +143,15 @@ const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => 
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // **Neuer Ansatz: Abschnittswechsel einfügen statt Seitenumbruch.**
-        // Wir suchen den gesamten Absatz (<w:p>...</w:p>), der "Studen End" enthält,
-        // und fügen unmittelbar nach dem Absatz einen neuen Absatz mit dem <w:sectPr>-Block ein.
+        // Abschnittswechsel einfügen, falls mehrere Datensätze vorhanden sind
         const sectionBreak = `<w:p><w:pPr>${sectPr}</w:pPr></w:p>`;
-        const paragraphRegex = /(<w:p\b[^>]*>[\s\S]*?<w:t[^>]*>Studen End<\/w:t>[\s\S]*?)(<\/w:p>)/g;
-        if (paragraphRegex.test(studentSection) && i < excelData.length - 1) {
-          studentSection = studentSection.replace(
-            paragraphRegex,
-            `$1$2${sectionBreak}`
-          );
-        } else if (i < excelData.length - 1) {
-          // Fallback: Hänge den Abschnittswechsel als eigenen Absatz an.
+        if (i < dataArray.length - 1) {
           studentSection += sectionBreak;
         }
-        
         allStudentSections += studentSection;
       });
 
-      // Hänge zum Ende der zusammengesetzten Schülerabschnitte einmalig den <w:sectPr>-Block an,
+      // Hänge zum Ende der zusammengesetzten Abschnitte einmalig den <w:sectPr>-Block an,
       // damit die Sektionseinstellungen erhalten bleiben.
       const newBodyContent = allStudentSections + sectPr;
 
@@ -199,7 +182,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => 
   };
 
   return (
-    <div>
+    <div style={{ textAlign: 'center' }}>
       <button onClick={generateDocx} disabled={processing}>
         {processing ? 'Generiere...' : 'Word-Dokument erstellen'}
       </button>
