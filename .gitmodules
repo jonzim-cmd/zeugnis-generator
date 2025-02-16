@@ -1,0 +1,3 @@
+[submodule "private-templates"]
+	path = private-templates
+	url = git@github.com:jonzim-cmd/private-template-repo.git
