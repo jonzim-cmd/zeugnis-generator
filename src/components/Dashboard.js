@@ -145,19 +145,26 @@ const Dashboard = () => {
 
         <Divider sx={{ my: 3 }} />
 
-        {/* Section: Word-Template Upload & Dokumentgenerierung */}
-        <Box sx={{ mt: 3, p: 2, backgroundColor: '#fff3e0', borderRadius: 1 }}>
+        {/* Section: Word-Template Upload */}
+        <Box sx={{ mt: 3, p: 2, backgroundColor: '#ede7f6', borderRadius: 1 }}>
           <Typography variant="h6" gutterBottom>
-            Word-Template Upload & Dokumentgenerierung
+            Word-Template Upload
           </Typography>
           <TemplateImport onTemplateLoaded={setCustomTemplate} />
-          <Box sx={{ mt: 2, textAlign: 'center' }}>
-            <WordTemplateProcessor
-              dashboardData={dashboardData}
-              customTemplate={customTemplate}
-              excelData={excelData && excelData.length > 0 ? excelData : [{ KL: '', gdat: '' }]}
-            />
-          </Box>
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
+
+        {/* Section: Dokumentgenerierung */}
+        <Box sx={{ mt: 3, p: 2, backgroundColor: '#fff3e0', borderRadius: 1, textAlign: 'center' }}>
+          <Typography variant="h6" gutterBottom>
+            Dokumentgenerierung
+          </Typography>
+          <WordTemplateProcessor
+            dashboardData={dashboardData}
+            customTemplate={customTemplate}
+            excelData={excelData && excelData.length > 0 ? excelData : [{ KL: '', gdat: '' }]}
+          />
         </Box>
       </Paper>
     </Container>
