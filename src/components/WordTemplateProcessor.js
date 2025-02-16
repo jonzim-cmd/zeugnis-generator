@@ -143,17 +143,17 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // **Seitenumbruch direkt nach der Textmarke "Studen End" einfügen:**
-        // Wir suchen nach dem <w:t>-Element, das den Text "Studen End" enthält, und fügen direkt danach inline einen Seitenumbruch ein.
-        // Damit wird kein eigener Absatz erstellt und keine leere Seite erzeugt.
-        const markerRegex = /(<w:t[^>]*>Studen End<\/w:t>)/g;
-        if (markerRegex.test(studentSection)) {
-          // Für alle Schülerabschnitte außer dem letzten fügen wir den Seitenumbruch ein.
-          if (i < excelData.length - 1) {
-            studentSection = studentSection.replace(markerRegex, '$1<w:r><w:br w:type="page"/></w:r>');
-          }
+        // **Neuer Ansatz: Seitenumbruch als separaten Run in demselben Absatz einfügen.**
+        // Wir suchen den gesamten Absatz (<w:p>...</w:p>), der "Studen End" enthält,
+        // und fügen unmittelbar vor dem schließenden </w:p> einen neuen Run mit dem Seitenumbruch ein.
+        const paragraphRegex = /(<w:p\b[^>]*>[\s\S]*?<w:t[^>]*>Studen End<\/w:t>[\s\S]*?)(<\/w:p>)/g;
+        if (paragraphRegex.test(studentSection) && i < excelData.length - 1) {
+          studentSection = studentSection.replace(
+            paragraphRegex,
+            '$1<w:r><w:br w:type="page"/></w:r>$2'
+          );
         } else if (i < excelData.length - 1) {
-          // Falls der Marker nicht gefunden wurde, als Fallback: Hänge den Seitenumbruch als eigenen Absatz an.
+          // Fallback: Hänge den Seitenumbruch als eigenen Absatz an.
           studentSection += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
         }
         
