@@ -43,10 +43,10 @@ const formatIsoDate = (isoStr) => {
   return `${day}.${month}.${year}`;
 };
 
-const WordTemplateProcessor = ({ excelData, dashboardData }) => {
+const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => {
   const [processing, setProcessing] = useState(false);
 
-  // Bestimme anhand der Zeugnisart das Template
+  // Bestimme anhand der Zeugnisart das Standard-Template
   const getTemplateFileName = () => {
     const art = dashboardData.zeugnisart || '';
     if (art === 'Zwischenzeugnis') {
@@ -60,12 +60,19 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
   const generateDocx = async () => {
     setProcessing(true);
     try {
-      const templateFile = getTemplateFileName();
-      const response = await fetch(templateFile);
-      if (!response.ok) {
-        throw new Error(`Template nicht gefunden: ${templateFile}`);
+      let arrayBuffer;
+      if (customTemplate) {
+        // Verwende das hochgeladene Template
+        arrayBuffer = customTemplate;
+      } else {
+        // Verwende das Standard-Template
+        const templateFile = getTemplateFileName();
+        const response = await fetch(templateFile);
+        if (!response.ok) {
+          throw new Error(`Template nicht gefunden: ${templateFile}`);
+        }
+        arrayBuffer = await response.arrayBuffer();
       }
-      const arrayBuffer = await response.arrayBuffer();
 
       // Lade das DOCX (ZIP-Archiv)
       const zip = new PizZip(arrayBuffer);
