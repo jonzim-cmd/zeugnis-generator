@@ -43,7 +43,7 @@ const formatIsoDate = (isoStr) => {
   return `${day}.${month}.${year}`;
 };
 
-const WordTemplateProcessor = ({ dashboardData, customTemplate, excelData }) => {
+const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => {
   const [processing, setProcessing] = useState(false);
 
   // Bestimme anhand der Zeugnisart das Standard-Template
@@ -65,7 +65,7 @@ const WordTemplateProcessor = ({ dashboardData, customTemplate, excelData }) => 
         // Verwende das hochgeladene Template
         arrayBuffer = customTemplate;
       } else {
-        // Verwende das Standard-Template
+        // Verwende das Standard-Template aus dem Public-Ordner
         const templateFile = getTemplateFileName();
         const response = await fetch(templateFile);
         if (!response.ok) {
@@ -105,13 +105,14 @@ const WordTemplateProcessor = ({ dashboardData, customTemplate, excelData }) => 
         studentTemplate = studentTemplate.substring(0, sectPrIndex);
       }
 
-      // --- Erzeuge für jeden "Schüler" einen Abschnitt ---
+      // --- Erzeuge für jeden Schüler einen Abschnitt ---
       let allStudentSections = "";
-      // Da kein Excel-Upload mehr erfolgt, verwenden wir ein Dummy-Datensatz
-      const dataArray = Array.isArray(excelData) && excelData.length > 0 ? excelData : [{ KL: '', gdat: '' }];
-      dataArray.forEach((student, i) => {
+      if (!Array.isArray(excelData)) {
+        excelData = [excelData];
+      }
+      excelData.forEach((student, i) => {
         let studentSection = studentTemplate;
-        // Mapping aus Dashboard-Daten und Dummy-Daten
+        // Mapping aus Dashboard-Daten und Excel-Daten
         const mapping = {
           'placeholdersj': escapeXml(dashboardData.schuljahr || ''),
           'placeholdersl': escapeXml(dashboardData.schulleitung || ''),
@@ -119,10 +120,16 @@ const WordTemplateProcessor = ({ dashboardData, customTemplate, excelData }) => 
           'kltitel': escapeXml(dashboardData.kl_titel || ''),
           'zeugnisdatum': escapeXml(formatIsoDate(dashboardData.datum) || ''),
           'placeholderkl': escapeXml(dashboardData.klassenleitung || ''),
-          // Dummy-spezifisch:
+          // Excel-spezifisch:
           'placeholderklasse': escapeXml(student.KL || ''),
           'gdat': escapeXml(formatExcelDate(student.gdat) || '')
         };
+
+        // Ergänze weitere Excel-Werte, ohne die oben definierten Keys zu überschreiben
+        Object.entries(student).forEach(([key, value]) => {
+          if (['KL', 'gdat'].includes(key)) return;
+          mapping[key] = escapeXml(value);
+        });
 
         // Ersetze zuerst den Excel-Platzhalter "placeholderklasse"
         studentSection = studentSection.replace(
@@ -143,15 +150,23 @@ const WordTemplateProcessor = ({ dashboardData, customTemplate, excelData }) => 
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // Abschnittswechsel einfügen, falls mehrere Datensätze vorhanden sind
+        // **Abschnittswechsel einfügen statt Seitenumbruch:**
         const sectionBreak = `<w:p><w:pPr>${sectPr}</w:pPr></w:p>`;
-        if (i < dataArray.length - 1) {
+        const paragraphRegex = /(<w:p\b[^>]*>[\s\S]*?<w:t[^>]*>Studen End<\/w:t>[\s\S]*?)(<\/w:p>)/g;
+        if (paragraphRegex.test(studentSection) && i < excelData.length - 1) {
+          studentSection = studentSection.replace(
+            paragraphRegex,
+            `$1$2${sectionBreak}`
+          );
+        } else if (i < excelData.length - 1) {
+          // Fallback: Hänge den Abschnittswechsel als eigenen Absatz an.
           studentSection += sectionBreak;
         }
+        
         allStudentSections += studentSection;
       });
 
-      // Hänge zum Ende der zusammengesetzten Abschnitte einmalig den <w:sectPr>-Block an,
+      // Hänge zum Ende der zusammengesetzten Schülerabschnitte einmalig den <w:sectPr>-Block an,
       // damit die Sektionseinstellungen erhalten bleiben.
       const newBodyContent = allStudentSections + sectPr;
 
