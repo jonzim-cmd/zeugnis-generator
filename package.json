@@ -19,7 +19,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "prebuild": "mkdir -p ~/.ssh && echo \"$SSH_PRIVATE_KEY\" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519 && ls -la ~/.ssh && git submodule update --init --recursive",
+    "prebuild": "mkdir -p ~/.ssh && echo \"$SSH_PRIVATE_KEY\" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519 && echo \"Length: ${#SSH_PRIVATE_KEY}\" && cat ~/.ssh/id_ed25519 && ls -la ~/.ssh && git submodule update --init --recursive",
     "build": "GIT_SSH_COMMAND='ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no' react-scripts build",
     "postbuild": "rm -rf docs && mkdir -p docs && cp -r build/* docs/ && touch docs/.nojekyll",
     "deploy": "git stash push --include-untracked || true && npm run build && git add docs && git commit -m \"Update docs folder\" && git pull --rebase --autostash && git push && git stash pop || true"
