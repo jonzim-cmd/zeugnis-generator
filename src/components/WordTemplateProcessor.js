@@ -57,6 +57,9 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
     return `${process.env.PUBLIC_URL}/template_jahr.docx`;
   };
 
+  // Definiere den Seitenumbruch-Run – er verwendet den korrekten Namespace (w:)
+  const pageBreakRun = '<w:r><w:br w:type="page"/></w:r>';
+
   const generateDocx = async () => {
     setProcessing(true);
     try {
@@ -143,15 +146,16 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // **Inline-Seitenumbruch einfügen:**
-        // Wir suchen exakt das <w:t>-Element, das "Studen End" enthält, und hängen direkt dahinter (außer im letzten Schüler) einen Seitenumbruch-Run ein.
+        // Füge inline einen Seitenumbruch ein – genau wie du es im Word-Dokument tun würdest,
+        // indem du den Cursor hinter "Studen End" setzt und dann den Umbruch einfügst.
+        // Suche dazu exakt nach dem <w:t>-Element, das "Studen End" enthält.
         const markerRegex = /(<w:t[^>]*>Studen End<\/w:t>)/g;
         if (markerRegex.test(studentSection) && i < excelData.length - 1) {
-          // Hier wird nach dem geschlossenen <w:t>-Element der Seitenumbruch eingefügt, ohne einen neuen Absatz zu starten.
-          studentSection = studentSection.replace(markerRegex, '$1<w:r><w:br w:type="page"/></w:r>');
+          // Füge den Seitenumbruch direkt nach dem geschlossenen <w:t>-Element ein (ohne einen neuen Absatz zu erzeugen)
+          studentSection = studentSection.replace(markerRegex, `$1${pageBreakRun}`);
         } else if (i < excelData.length - 1) {
-          // Fallback (sollte eigentlich nicht eintreten): Hänge den Seitenumbruch als separaten Run an.
-          studentSection += `<w:r><w:br w:type="page"/></w:r>`;
+          // Fallback: Sollte der Marker nicht gefunden werden, hänge den Seitenumbruch als eigenen Run an.
+          studentSection += pageBreakRun;
         }
         
         allStudentSections += studentSection;
