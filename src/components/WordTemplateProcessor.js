@@ -2,14 +2,10 @@ import React, { useState } from 'react';
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
 
-// --- Hilfsfunktionen ---
-
-// Escapen von Regex-Sonderzeichen
 const escapeRegExp = (string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
-// Escapen von XML-Sonderzeichen
 const escapeXml = (unsafe) => {
   return unsafe.toString().replace(/[<>&'"]/g, (c) => {
     switch (c) {
@@ -21,7 +17,6 @@ const escapeXml = (unsafe) => {
   });
 };
 
-// Konvertiert Excel-Serial in ein Datum im Format TT.MM.JJJJ
 const formatExcelDate = (dateVal) => {
   if (typeof dateVal === 'number') {
     const utcDays = Math.floor(dateVal - 25569);
@@ -35,7 +30,6 @@ const formatExcelDate = (dateVal) => {
   return dateVal;
 };
 
-// Konvertiert einen ISO-Datum-String in das Format TT.MM.JJJJ
 const formatIsoDate = (isoStr) => {
   if (!isoStr) return '';
   const date = new Date(isoStr);
@@ -68,18 +62,15 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
       const arrayBuffer = await response.arrayBuffer();
 
-      // --- Original- und Arbeitskopie des ZIP-Archivs erstellen ---
       const originalZip = new PizZip(arrayBuffer);
       const zip = new PizZip(arrayBuffer);
 
-      // Hole document.xml
       const documentXmlPath = 'word/document.xml';
       if (!zip.file(documentXmlPath)) {
         throw new Error('Dokumentstruktur ungültig: word/document.xml nicht gefunden');
       }
       let xmlContent = zip.file(documentXmlPath).asText();
 
-      // --- 1. Lesezeichen für den Studentensektionsbereich ermitteln ---
       const startBookmarkStartRegex = /<w:bookmarkStart[^>]*w:name="STUDENT_SECTION_START"[^>]*>/;
       const startBookmarkEndRegex = /<w:bookmarkEnd[^>]*w:id\s*=\s*"(\d+)"[^>]*>/;
       const endBookmarkStartRegex = /<w:bookmarkStart[^>]*w:name="STUDENT_SECTION_END"[^>]*>/;
@@ -109,12 +100,9 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       const endBookmarkStartIndex =
         startBookmarkEndIndex + endBookmarkStartSlice.indexOf(endBookmarkStartMatch[0]);
 
-      // Entferne alle Lesezeichen im zu ersetzenden Abschnitt
-      let sectionTemplate = xmlContent
-        .substring(startBookmarkEndIndex, endBookmarkStartIndex)
+      let sectionTemplate = xmlContent.substring(startBookmarkEndIndex, endBookmarkStartIndex)
         .replace(/<w:bookmark(Start|End)[^>]*>/g, '');
 
-      // --- 2. Platzhalter-Ersetzung für jeden Schüler ---
       if (!Array.isArray(excelData)) {
         excelData = [excelData];
       }
@@ -123,7 +111,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         const student = excelData[i];
         let studentSection = sectionTemplate;
 
-        // Mapping aus Dashboard-Daten und Excel-Daten
         const mapping = {
           'placeholdersj': escapeXml(dashboardData.schuljahr || ''),
           'placeholdersl': escapeXml(dashboardData.schulleitung || ''),
@@ -133,33 +120,28 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           'placeholderkl': escapeXml(dashboardData.klassenleitung || '')
         };
 
-        // Spezifische Excel-Daten:
-        // Ersetze "placeholderklasse" mit Wert aus Spalte "KL"
-        mapping['placeholderklasse'] = escapeXml(student.KL || '');
-        // Formatierung des Datums "gdat" nach deutschem Format
-        mapping['gdat'] = escapeXml(formatExcelDate(student.gdat) || '');
-
-        // Weitere Excel-Felder einfügen (überspringt dabei bereits definierte Felder)
         Object.entries(student).forEach(([key, value]) => {
-          if (key === 'KL' || key === 'gdat') return;
-          let safeValue = escapeXml(value);
+          let formattedValue = value;
+          if (key === 'gdat') {
+            formattedValue = formatExcelDate(value);
+          }
+          let safeValue = escapeXml(formattedValue);
           if (safeValue.includes('\u0000')) {
             safeValue = safeValue.replace(/\u0000/g, '');
           }
           mapping[key] = safeValue;
         });
 
-        // Zuerst den Excel-Klassenplatzhalter ersetzen
+        mapping['placeholderklasse'] = escapeXml(student.KL || '');
+
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderklasse'), 'g'),
           mapping['placeholderklasse'] || ''
         );
-        // Dann den Dashboard-Wert für Klassenleitung ersetzen
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderkl'), 'g'),
           mapping['placeholderkl'] || ''
         );
-        // Ersetze alle übrigen Platzhalter
         Object.keys(mapping)
           .filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl')
           .sort((a, b) => b.length - a.length)
@@ -168,7 +150,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // Füge Seitenumbruch zwischen den Schülerabschnitten ein
         const pageBreak = `
           <w:p>
             <w:r>
@@ -182,33 +163,10 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         allStudentSections += studentSection;
       }
 
-      // --- 3. Zusammenbau des neuen Dokuments ---
       const beforeSection = xmlContent.substring(0, startBookmarkEndIndex);
       const afterSection = xmlContent.substring(endBookmarkStartIndex);
       let newXmlContent = beforeSection + allStudentSections + afterSection;
 
-      // --- 4. Zusätzliche Anpassungen am XML ---
-      newXmlContent = newXmlContent
-        .replace(/<\?xml.*?\?>\n?/g, '')
-        .replace(/^\uFEFF/, '')
-        .trim();
-
-      newXmlContent = newXmlContent.replace(
-        /<w:t(\b[^>]*)>([^<]*)<\/w:t>/g,
-        (match, attrs, content) => `<w:t${attrs}>${content}</w:t>`
-      ).replace(
-        /<w:t(\b[^>]*)>([^<]*)(<\/w:t>)?/g,
-        (match, attrs, content, closingTag) => closingTag ? match : `<w:t${attrs}>${content}</w:t>`
-      );
-
-      newXmlContent = newXmlContent.replace(/xmlns:w="[^"]*"/g, '');
-      newXmlContent = newXmlContent.replace(
-        /<w:document/,
-        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
-      );
-      newXmlContent = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + newXmlContent;
-
-      // --- 5. XML-Validierung ---
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(newXmlContent, "text/xml");
       if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
@@ -216,7 +174,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         throw new Error("Generiertes XML ist fehlerhaft");
       }
 
-      // --- 6. ZIP-Struktur vervollständigen und Dokument ersetzen ---
       Object.keys(originalZip.files).forEach((relativePath) => {
         const file = originalZip.file(relativePath);
         if (!zip.file(relativePath)) {
@@ -225,7 +182,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       });
       zip.file(documentXmlPath, newXmlContent);
 
-      // --- 7. Komprimierung und Speichern ---
       const out = zip.generate({
         type: 'blob',
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
