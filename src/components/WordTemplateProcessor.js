@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
 
-// Hilfsfunktion: Escapen von Regex-Sonderzeichen
+// Escapen von Regex-Sonderzeichen
 const escapeRegExp = (string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
@@ -46,6 +46,7 @@ const formatIsoDate = (isoStr) => {
 const WordTemplateProcessor = ({ excelData, dashboardData }) => {
   const [processing, setProcessing] = useState(false);
 
+  // Bestimme anhand der Zeugnisart das Template
   const getTemplateFileName = () => {
     const art = dashboardData.zeugnisart || '';
     if (art === 'Zwischenzeugnis') {
@@ -72,50 +73,41 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       if (!zip.file(documentXmlPath)) {
         throw new Error('Dokumentstruktur ungültig: word/document.xml nicht gefunden');
       }
-      let xmlContent = zip.file(documentXmlPath).asText();
+      const xmlContent = zip.file(documentXmlPath).asText();
 
-      // --- Bookmark-Extraktion analog zur Originalversion ---
-      // Suche das bookmarkStart-Element für STUDENT_SECTION_START
-      const startBookmarkStartRegex = /<w:bookmarkStart[^>]*w:name="STUDENT_SECTION_START"[^>]*>/;
-      const startBookmarkStartMatch = xmlContent.match(startBookmarkStartRegex);
-      if (!startBookmarkStartMatch) {
-        throw new Error('Lesezeichen "STUDENT_SECTION_START" nicht gefunden');
+      // --- Extrahiere den <w:body>-Bereich als Vorlage ---
+      const bodyStartTag = '<w:body>';
+      const bodyEndTag = '</w:body>';
+      const bodyStartIndex = xmlContent.indexOf(bodyStartTag);
+      const bodyEndIndex = xmlContent.indexOf(bodyEndTag);
+      if (bodyStartIndex === -1 || bodyEndIndex === -1) {
+        throw new Error('Die benötigten <w:body>-Tags wurden nicht gefunden.');
       }
-      const startBookmarkStartIndex = xmlContent.indexOf(startBookmarkStartMatch[0]);
-      // Das Ende des bookmarkStart-Elements
-      const sectionStart = xmlContent.indexOf('>', startBookmarkStartIndex) + 1;
+      // Behalte den Originalheader und alles vor <w:body>
+      const preBody = xmlContent.substring(0, bodyStartIndex + bodyStartTag.length);
+      // Und alles nach </w:body> (inklusive </w:document> etc.)
+      const postBody = xmlContent.substring(bodyEndIndex);
+      // Extrahiere den Body-Inhalt (das Zeugnis-Template)
+      let studentTemplate = xmlContent.substring(bodyStartIndex + bodyStartTag.length, bodyEndIndex).trim();
 
-      // Suche das zugehörige bookmarkEnd für STUDENT_SECTION_START
-      const startBookmarkEndRegex = /<w:bookmarkEnd[^>]*w:id\s*=\s*"(\d+)"[^>]*>/;
-      const afterStartBookmarkStart = xmlContent.slice(sectionStart);
-      const startBookmarkEndMatch = afterStartBookmarkStart.match(startBookmarkEndRegex);
-      if (!startBookmarkEndMatch) {
-        throw new Error('bookmarkEnd für "STUDENT_SECTION_START" nicht gefunden');
+      // Entferne gegebenenfalls den <w:sectPr>-Block am Ende (Sektionseinstellungen),
+      // damit er nicht mehrfach eingefügt wird. Er wird am Ende des gesamten Dokuments angehängt.
+      let sectPr = '';
+      const sectPrIndex = studentTemplate.lastIndexOf('<w:sectPr');
+      if (sectPrIndex !== -1) {
+        sectPr = studentTemplate.substring(sectPrIndex);
+        studentTemplate = studentTemplate.substring(0, sectPrIndex);
       }
-      const startBookmarkEndIndex =
-        sectionStart + afterStartBookmarkStart.indexOf(startBookmarkEndMatch[0]) + startBookmarkEndMatch[0].length;
 
-      // Suche das bookmarkStart-Element für STUDENT_SECTION_END
-      const endBookmarkStartRegex = /<w:bookmarkStart[^>]*w:name="STUDENT_SECTION_END"[^>]*>/;
-      const afterStartBookmarkEnd = xmlContent.slice(startBookmarkEndIndex);
-      const endBookmarkStartMatch = afterStartBookmarkEnd.match(endBookmarkStartRegex);
-      if (!endBookmarkStartMatch) {
-        throw new Error('Lesezeichen "STUDENT_SECTION_END" nicht gefunden');
-      }
-      const endBookmarkStartIndex = startBookmarkEndIndex + afterStartBookmarkEnd.indexOf(endBookmarkStartMatch[0]);
-
-      // Extrahiere den Studentensektionsbereich (ohne Lesezeichen)
-      let sectionTemplate = xmlContent.substring(startBookmarkEndIndex, endBookmarkStartIndex)
-        .replace(/<w:bookmark(Start|End)[^>]*>/g, '');
-
-      // --- Platzhalter-Ersetzung für jeden Schüler ---
+      // --- Erzeuge für jeden Schüler einen Abschnitt ---
+      let allStudentSections = "";
+      // Falls excelData kein Array ist, packe es in ein Array
       if (!Array.isArray(excelData)) {
         excelData = [excelData];
       }
-      let allStudentSections = "";
       excelData.forEach((student, i) => {
-        let studentSection = sectionTemplate;
-
+        let studentSection = studentTemplate;
+        // Mapping aus Dashboard-Daten und Excel-Daten
         const mapping = {
           'placeholdersj': escapeXml(dashboardData.schuljahr || ''),
           'placeholdersl': escapeXml(dashboardData.schulleitung || ''),
@@ -128,7 +120,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           'gdat': escapeXml(formatExcelDate(student.gdat) || '')
         };
 
-        // Weitere Excel-Werte einfügen, ohne bereits definierte Schlüssel zu überschreiben
+        // Ergänze weitere Excel-Werte, ohne die oben definierten Keys zu überschreiben
         Object.entries(student).forEach(([key, value]) => {
           if (['KL', 'gdat'].includes(key)) return;
           mapping[key] = escapeXml(value);
@@ -139,12 +131,12 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           new RegExp(escapeRegExp('placeholderklasse'), 'g'),
           mapping['placeholderklasse']
         );
-        // Dann den Dashboard-Platzhalter "placeholderkl"
+        // Ersetze danach den Dashboard-Platzhalter "placeholderkl"
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderkl'), 'g'),
           mapping['placeholderkl']
         );
-        // Ersetze alle übrigen Platzhalter exakt
+        // Ersetze alle übrigen Platzhalter exakt – längere zuerst
         Object.keys(mapping)
           .filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl')
           .sort((a, b) => b.length - a.length)
@@ -153,7 +145,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // Füge zwischen den Schülern einen Seitenumbruch ein (außer beim letzten)
+        // Füge zwischen den Schülerabschnitten einen Seitenumbruch ein (außer beim letzten)
         if (i < excelData.length - 1) {
           studentSection += `
             <w:p>
@@ -166,14 +158,14 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         allStudentSections += studentSection;
       });
 
-      // --- Zusammensetzen des neuen Dokuments ---
-      const newXmlContent =
-        xmlContent.substring(0, startBookmarkEndIndex) +
-        allStudentSections +
-        xmlContent.substring(endBookmarkStartIndex);
+      // Hänge zum Ende der zusammengesetzten Schülerabschnitte einmalig den <w:sectPr>-Block an,
+      // damit die Sektionseinstellungen (z. B. Seitenränder) erhalten bleiben.
+      const newBodyContent = allStudentSections + sectPr;
 
-      // Keine Änderung am XML-Header oder den Namespaces – nur die exakten Platzhalter werden ersetzt.
-      // Optional: Überprüfung der XML-Struktur (nur zur Diagnose)
+      // Füge den neuen Body wieder in das komplette Dokument ein
+      const newXmlContent = preBody + newBodyContent + postBody;
+
+      // (Optional) Überprüfung der XML-Struktur – nur zur Diagnose
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(newXmlContent, "text/xml");
       if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
@@ -181,7 +173,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         throw new Error("Generiertes XML ist fehlerhaft");
       }
 
-      // Aktualisiere document.xml im ZIP
+      // Überschreibe document.xml im ZIP und speichere das fertige Dokument
       zip.file(documentXmlPath, newXmlContent);
       const out = zip.generate({
         type: 'blob',
