@@ -143,18 +143,15 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // **Neuer Ansatz: Seitenumbruch als separaten Run in demselben Absatz einfügen.**
-        // Wir suchen den gesamten Absatz (<w:p>...</w:p>), der "Studen End" enthält,
-        // und fügen unmittelbar vor dem schließenden </w:p> einen neuen Run mit dem Seitenumbruch ein.
-        const paragraphRegex = /(<w:p\b[^>]*>[\s\S]*?<w:t[^>]*>Studen End<\/w:t>[\s\S]*?)(<\/w:p>)/g;
-        if (paragraphRegex.test(studentSection) && i < excelData.length - 1) {
-          studentSection = studentSection.replace(
-            paragraphRegex,
-            '$1<w:r><w:br w:type="page"/></w:r>$2'
-          );
+        // **Inline-Seitenumbruch einfügen:**
+        // Wir suchen exakt das <w:t>-Element, das "Studen End" enthält, und hängen direkt dahinter (außer im letzten Schüler) einen Seitenumbruch-Run ein.
+        const markerRegex = /(<w:t[^>]*>Studen End<\/w:t>)/g;
+        if (markerRegex.test(studentSection) && i < excelData.length - 1) {
+          // Hier wird nach dem geschlossenen <w:t>-Element der Seitenumbruch eingefügt, ohne einen neuen Absatz zu starten.
+          studentSection = studentSection.replace(markerRegex, '$1<w:r><w:br w:type="page"/></w:r>');
         } else if (i < excelData.length - 1) {
-          // Fallback: Hänge den Seitenumbruch als eigenen Absatz an.
-          studentSection += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+          // Fallback (sollte eigentlich nicht eintreten): Hänge den Seitenumbruch als separaten Run an.
+          studentSection += `<w:r><w:br w:type="page"/></w:r>`;
         }
         
         allStudentSections += studentSection;
