@@ -32,8 +32,7 @@ const Dashboard = () => {
           variant="h4" 
           align="center" 
           gutterBottom 
-          sx={{ fontWeight: 'bold' }}
-        >
+          sx={{ fontWeight: 'bold' }}>
           Zeugnisgenerator
         </Typography>>
 
