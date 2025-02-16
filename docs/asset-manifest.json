@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/zeugnis-generator/static/css/main.686d230e.css",
-    "main.js": "/zeugnis-generator/static/js/main.4c42b68d.js",
+    "main.js": "/zeugnis-generator/static/js/main.a91a4b1c.js",
     "index.html": "/zeugnis-generator/index.html",
     "main.686d230e.css.map": "/zeugnis-generator/static/css/main.686d230e.css.map",
-    "main.4c42b68d.js.map": "/zeugnis-generator/static/js/main.4c42b68d.js.map"
+    "main.a91a4b1c.js.map": "/zeugnis-generator/static/js/main.a91a4b1c.js.map"
   },
   "entrypoints": [
     "static/css/main.686d230e.css",
-    "static/js/main.4c42b68d.js"
+    "static/js/main.a91a4b1c.js"
   ]
 }
