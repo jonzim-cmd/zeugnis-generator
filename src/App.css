@@ -1,5 +1,18 @@
-/* Minimaler Style für die Anwendung */
-body {
-  margin: 0;
-  font-family: 'Roboto', sans-serif;
+/* Globale Styles für Eingabefelder im Dark Mode */
+input[type="text"],
+input[type="date"],
+select {
+  background-color: #333; /* dunkler Hintergrund */
+  color: #fff;            /* weiße Schrift */
+  border: 1px solid #555; /* dunkle Rahmenfarbe */
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+/* Optionale Anpassungen für den Fokus-Zustand */
+input[type="text"]:focus,
+input[type="date"]:focus,
+select:focus {
+  outline: none;
+  border-color: #90caf9; /* z. B. primäre Farbe aus dem Dark Theme */
 }
