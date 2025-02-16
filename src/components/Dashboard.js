@@ -34,7 +34,7 @@ const Dashboard = () => {
           gutterBottom 
           sx={{ fontWeight: 'bold' }}>
           Zeugnisgenerator
-        </Typography>>
+        </Typography>
 
         {/* Section: Excel Upload */}
         <Box sx={{ mt: 3, p: 2, backgroundColor: '#e3f2fd', borderRadius: 1 }}>
