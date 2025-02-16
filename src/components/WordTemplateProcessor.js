@@ -143,14 +143,17 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // **Neuer Feinschliff:** Seitenumbruch direkt nach der Textmarke "Studen End" einfügen.
-        // Hier wird der Seitenumbruch inline (ohne eigenen Absatz) eingefügt.
+        // Entferne eventuell vorhandene leere Absätze am Ende dieses Abschnitts
+        studentSection = studentSection.replace(/(<w:p[^>]*>\s*<\/w:p>\s*)+$/g, '');
+
+        // Füge den Seitenumbruch direkt nach der Textmarke "Studen End" ein,
+        // sofern diese vorhanden ist. Andernfalls, falls es nicht der letzte Schüler ist, hänge den Seitenumbruch als eigenen Absatz an.
         const marker = "Studen End";
-        const inlinePageBreak = `<w:r><w:br w:type="page"/></w:r>`;
+        const pageBreakParagraph = `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
         if (studentSection.indexOf(marker) !== -1) {
-          studentSection = studentSection.replace(marker, marker + inlinePageBreak);
+          studentSection = studentSection.replace(marker, marker + pageBreakParagraph);
         } else if (i < excelData.length - 1) {
-          studentSection += inlinePageBreak;
+          studentSection += pageBreakParagraph;
         }
         
         allStudentSections += studentSection;
