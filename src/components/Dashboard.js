@@ -4,6 +4,7 @@ import { AppContext } from '../context/AppContext';
 import ExcelUpload from './ExcelUpload';
 import TemplateImport from './TemplateImport';
 import WordTemplateProcessor from './WordTemplateProcessor';
+import { styles } from './dashboardStyles';
 
 const Dashboard = () => {
   const { dashboardData, setDashboardData, excelData } = useContext(AppContext);
@@ -32,12 +33,12 @@ const Dashboard = () => {
           variant="h4" 
           align="center" 
           gutterBottom 
-          sx={{ fontWeight: 'bold' }}>
+          sx={styles.header}>
           Zeugnisgenerator
         </Typography>
 
         {/* Section: Excel Upload */}
-        <Box sx={{ mt: 3, p: 2, backgroundColor: '#e3f2fd', borderRadius: 1 }}>
+        <Box sx={styles.excelUpload}>
           <Typography variant="h6" gutterBottom>
             Excel-Datei hochladen
           </Typography>
@@ -47,7 +48,7 @@ const Dashboard = () => {
         <Divider sx={{ my: 3 }} />
 
         {/* Section: Dashboard Eingaben */}
-        <Box sx={{ mt: 3, p: 2, backgroundColor: '#f1f8e9', borderRadius: 1 }}>
+        <Box sx={styles.dashboardInputs}>
           <Typography variant="h6" gutterBottom>
             Dashboard Eingaben
           </Typography>
@@ -150,7 +151,7 @@ const Dashboard = () => {
         <Divider sx={{ my: 3 }} />
 
         {/* Section: Word-Template Upload */}
-        <Box sx={{ mt: 3, p: 2, backgroundColor: '#ede7f6', borderRadius: 1 }}>
+        <Box sx={styles.templateUpload}>
           <Typography variant="h6" gutterBottom>
             Word-Template Upload
           </Typography>
@@ -160,7 +161,7 @@ const Dashboard = () => {
         <Divider sx={{ my: 3 }} />
 
         {/* Section: Dokumentgenerierung */}
-        <Box sx={{ mt: 3, p: 2, backgroundColor: '#fff3e0', borderRadius: 1, textAlign: 'center' }}>
+        <Box sx={styles.documentGeneration}>
           <Typography variant="h6" gutterBottom>
             Dokumentgenerierung
           </Typography>
