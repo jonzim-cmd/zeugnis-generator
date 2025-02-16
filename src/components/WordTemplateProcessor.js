@@ -143,17 +143,18 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // Entferne eventuell vorhandene leere Absätze am Ende dieses Abschnitts
-        studentSection = studentSection.replace(/(<w:p[^>]*>\s*<\/w:p>\s*)+$/g, '');
-
-        // Füge den Seitenumbruch direkt nach der Textmarke "Studen End" ein,
-        // sofern diese vorhanden ist. Andernfalls, falls es nicht der letzte Schüler ist, hänge den Seitenumbruch als eigenen Absatz an.
-        const marker = "Studen End";
-        const pageBreakParagraph = `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
-        if (studentSection.indexOf(marker) !== -1) {
-          studentSection = studentSection.replace(marker, marker + pageBreakParagraph);
+        // **Seitenumbruch direkt nach der Textmarke "Studen End" einfügen:**
+        // Wir suchen nach dem <w:t>-Element, das den Text "Studen End" enthält, und fügen direkt danach inline einen Seitenumbruch ein.
+        // Damit wird kein eigener Absatz erstellt und keine leere Seite erzeugt.
+        const markerRegex = /(<w:t[^>]*>Studen End<\/w:t>)/g;
+        if (markerRegex.test(studentSection)) {
+          // Für alle Schülerabschnitte außer dem letzten fügen wir den Seitenumbruch ein.
+          if (i < excelData.length - 1) {
+            studentSection = studentSection.replace(markerRegex, '$1<w:r><w:br w:type="page"/></w:r>');
+          }
         } else if (i < excelData.length - 1) {
-          studentSection += pageBreakParagraph;
+          // Falls der Marker nicht gefunden wurde, als Fallback: Hänge den Seitenumbruch als eigenen Absatz an.
+          studentSection += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
         }
         
         allStudentSections += studentSection;
