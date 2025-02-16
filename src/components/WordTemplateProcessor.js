@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
 
+// Hilfsfunktion: Regex-Escaping
 const escapeRegExp = (string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
+// Escapen von XML-Sonderzeichen
 const escapeXml = (unsafe) => {
   return unsafe.toString().replace(/[<>&'"]/g, (c) => {
     switch (c) {
@@ -17,6 +19,7 @@ const escapeXml = (unsafe) => {
   });
 };
 
+// Konvertiert Excel-Serial in ein Datum im Format TT.MM.JJJJ
 const formatExcelDate = (dateVal) => {
   if (typeof dateVal === 'number') {
     const utcDays = Math.floor(dateVal - 25569);
@@ -30,6 +33,7 @@ const formatExcelDate = (dateVal) => {
   return dateVal;
 };
 
+// Konvertiert einen ISO-Datum-String in das Format TT.MM.JJJJ
 const formatIsoDate = (isoStr) => {
   if (!isoStr) return '';
   const date = new Date(isoStr);
@@ -42,6 +46,7 @@ const formatIsoDate = (isoStr) => {
 const WordTemplateProcessor = ({ excelData, dashboardData }) => {
   const [processing, setProcessing] = useState(false);
 
+  // Bestimme anhand der Zeugnisart das Template
   const getTemplateFileName = () => {
     const art = dashboardData.zeugnisart || '';
     if (art === 'Zwischenzeugnis') {
@@ -62,86 +67,70 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
       const arrayBuffer = await response.arrayBuffer();
 
-      const originalZip = new PizZip(arrayBuffer);
+      // Lade das ZIP-Archiv (DOCX)
       const zip = new PizZip(arrayBuffer);
-
       const documentXmlPath = 'word/document.xml';
       if (!zip.file(documentXmlPath)) {
         throw new Error('Dokumentstruktur ungültig: word/document.xml nicht gefunden');
       }
       let xmlContent = zip.file(documentXmlPath).asText();
 
-      const startBookmarkStartRegex = /<w:bookmarkStart[^>]*w:name="STUDENT_SECTION_START"[^>]*>/;
-      const startBookmarkEndRegex = /<w:bookmarkEnd[^>]*w:id\s*=\s*"(\d+)"[^>]*>/;
-      const endBookmarkStartRegex = /<w:bookmarkStart[^>]*w:name="STUDENT_SECTION_END"[^>]*>/;
+      // Hier nehmen wir an, dass im Template ein Bereich definiert ist, 
+      // in dem der Studentensektion steht, z. B. zwischen den Lesezeichen
+      const startBookmark = '<w:bookmarkStart w:name="STUDENT_SECTION_START"';
+      const endBookmark = '<w:bookmarkStart w:name="STUDENT_SECTION_END"';
+      const startIdx = xmlContent.indexOf(startBookmark);
+      const endIdx = xmlContent.indexOf(endBookmark);
 
-      const startBookmarkStartMatch = xmlContent.match(startBookmarkStartRegex);
-      if (!startBookmarkStartMatch) {
-        throw new Error('Lesezeichen "STUDENT_SECTION_START" nicht gefunden');
+      if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+        throw new Error('Die benötigten Lesezeichen für den Studentensektionsbereich wurden nicht gefunden.');
       }
-      const startBookmarkStartIndex = xmlContent.indexOf(startBookmarkStartMatch[0]);
-      const afterStartBookmarkStartIndex = startBookmarkStartIndex + startBookmarkStartMatch[0].length;
 
-      const startBookmarkEndSlice = xmlContent.slice(afterStartBookmarkStartIndex);
-      const startBookmarkEndMatch = startBookmarkEndSlice.match(startBookmarkEndRegex);
-      if (!startBookmarkEndMatch) {
-        throw new Error('bookmarkEnd für "STUDENT_SECTION_START" nicht gefunden');
-      }
-      const startBookmarkEndIndex =
-        afterStartBookmarkStartIndex +
-        startBookmarkEndSlice.indexOf(startBookmarkEndMatch[0]) +
-        startBookmarkEndMatch[0].length;
+      // Erhalte den zu ersetzenden Abschnitt, ohne XML-Manipulation des Headers oder der Namespaces
+      const sectionStartEnd = xmlContent.indexOf('>', startIdx) + 1;
+      const sectionTemplate = xmlContent.substring(sectionStartEnd, endIdx);
 
-      const endBookmarkStartSlice = xmlContent.slice(startBookmarkEndIndex);
-      const endBookmarkStartMatch = endBookmarkStartSlice.match(endBookmarkStartRegex);
-      if (!endBookmarkStartMatch) {
-        throw new Error('Lesezeichen "STUDENT_SECTION_END" nicht gefunden');
-      }
-      const endBookmarkStartIndex =
-        startBookmarkEndIndex + endBookmarkStartSlice.indexOf(endBookmarkStartMatch[0]);
-
-      let sectionTemplate = xmlContent.substring(startBookmarkEndIndex, endBookmarkStartIndex)
-        .replace(/<w:bookmark(Start|End)[^>]*>/g, '');
-
+      // Erstelle den zusammengesetzten Inhalt für alle Schüler
+      let allStudentSections = "";
       if (!Array.isArray(excelData)) {
         excelData = [excelData];
       }
-      let allStudentSections = "";
-      for (let i = 0; i < excelData.length; i++) {
-        const student = excelData[i];
+      excelData.forEach((student, i) => {
         let studentSection = sectionTemplate;
-
+        // Mapping aus Dashboard-Daten und Excel-Daten
         const mapping = {
           'placeholdersj': escapeXml(dashboardData.schuljahr || ''),
           'placeholdersl': escapeXml(dashboardData.schulleitung || ''),
           'sltitel': escapeXml(dashboardData.sl_titel || ''),
           'kltitel': escapeXml(dashboardData.kl_titel || ''),
           'zeugnisdatum': escapeXml(formatIsoDate(dashboardData.datum) || ''),
-          'placeholderkl': escapeXml(dashboardData.klassenleitung || '')
+          // Dashboard-Wert für Klassenleitung
+          'placeholderkl': escapeXml(dashboardData.klassenleitung || ''),
+          // Excel-spezifisch:
+          // Ersetze "placeholderklasse" mit dem Wert aus Spalte "KL"
+          'placeholderklasse': escapeXml(student.KL || ''),
+          // Datum "gdat" formatiert
+          'gdat': escapeXml(formatExcelDate(student.gdat) || '')
         };
 
+        // Ergänze weitere Excel-Felder, ohne Überschreibung der obigen Keys
         Object.entries(student).forEach(([key, value]) => {
-          let formattedValue = value;
-          if (key === 'gdat') {
-            formattedValue = formatExcelDate(value);
-          }
-          let safeValue = escapeXml(formattedValue);
-          if (safeValue.includes('\u0000')) {
-            safeValue = safeValue.replace(/\u0000/g, '');
-          }
+          if (['KL', 'gdat'].includes(key)) return;
+          let safeValue = escapeXml(value);
           mapping[key] = safeValue;
         });
 
-        mapping['placeholderklasse'] = escapeXml(student.KL || '');
-
+        // Ersetze zuerst den Excel-Platzhalter "placeholderklasse"
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderklasse'), 'g'),
-          mapping['placeholderklasse'] || ''
+          mapping['placeholderklasse']
         );
+        // Ersetze danach den Dashboard-Platzhalter "placeholderkl"
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderkl'), 'g'),
-          mapping['placeholderkl'] || ''
+          mapping['placeholderkl']
         );
+        // Ersetze alle übrigen Platzhalter exakt
         Object.keys(mapping)
           .filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl')
           .sort((a, b) => b.length - a.length)
@@ -150,23 +139,26 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        const pageBreak = `
-          <w:p>
-            <w:r>
-              <w:br w:type="page"/>
-            </w:r>
-          </w:p>
-        `;
+        // Füge zwischen den Schülern einen Seitenumbruch ein (außer beim letzten)
         if (i < excelData.length - 1) {
-          studentSection += pageBreak;
+          studentSection += `
+            <w:p>
+              <w:r>
+                <w:br w:type="page"/>
+              </w:r>
+            </w:p>
+          `;
         }
         allStudentSections += studentSection;
-      }
+      });
 
-      const beforeSection = xmlContent.substring(0, startBookmarkEndIndex);
-      const afterSection = xmlContent.substring(endBookmarkStartIndex);
-      let newXmlContent = beforeSection + allStudentSections + afterSection;
+      // Setze den neuen Inhalt wieder in das Dokument ein
+      const newXmlContent =
+        xmlContent.substring(0, sectionStartEnd) +
+        allStudentSections +
+        xmlContent.substring(endIdx);
 
+      // (Optional) Überprüfung der XML-Struktur – hier ohne Eingriff in Header/Namespaces
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(newXmlContent, "text/xml");
       if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
@@ -174,19 +166,11 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         throw new Error("Generiertes XML ist fehlerhaft");
       }
 
-      Object.keys(originalZip.files).forEach((relativePath) => {
-        const file = originalZip.file(relativePath);
-        if (!zip.file(relativePath)) {
-          zip.file(relativePath, file.asUint8Array());
-        }
-      });
+      // Überschreibe document.xml im ZIP und speichere das fertige Dokument
       zip.file(documentXmlPath, newXmlContent);
-
       const out = zip.generate({
         type: 'blob',
-        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        compression: 'DEFLATE',
-        compressionOptions: { level: 9 }
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       });
       saveAs(out, 'zeugnisse_gesamt.docx');
 
