@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
 
-// Helper functions remain the same
 const escapeRegExp = (string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
@@ -64,14 +63,12 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       const arrayBuffer = await response.arrayBuffer();
       const zip = new PizZip(arrayBuffer);
       
-      // Extrahiere und verarbeite document.xml
       const documentXmlPath = 'word/document.xml';
       if (!zip.file(documentXmlPath)) {
         throw new Error('Dokumentstruktur ungültig: word/document.xml nicht gefunden');
       }
       const xmlContent = zip.file(documentXmlPath).asText();
 
-      // XML Struktur extrahieren
       const bodyStartTag = '<w:body>';
       const bodyEndTag = '</w:body>';
       const bodyStartIndex = xmlContent.indexOf(bodyStartTag);
@@ -88,17 +85,16 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         bodyEndIndex
       ).trim();
 
-      // Extrahiere sectPr für spätere Verwendung
       const sectPrMatch = templateContent.match(/<w:sectPr>[\s\S]*?<\/w:sectPr>/);
-      const sectPr = sectPrMatch ? sectPrMatch[0] : '';
+      const originalSectPr = sectPrMatch ? sectPrMatch[0] : '';
       templateContent = templateContent.replace(/<w:sectPr>[\s\S]*?<\/w:sectPr>/, '');
 
-      // Verarbeite jeden Schüler
+      const continuousSectPr = originalSectPr.replace(/w:type="[^"]*"/g, 'w:type="continuous"');
+
       const studentSections = (Array.isArray(excelData) ? excelData : [excelData])
         .map((student, index, array) => {
           let section = templateContent;
           
-          // Mapping erstellen
           const mapping = {
             'placeholdersj': escapeXml(dashboardData.schuljahr || ''),
             'placeholdersl': escapeXml(dashboardData.schulleitung || ''),
@@ -115,7 +111,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             )
           };
 
-          // Platzhalter ersetzen
           Object.entries(mapping)
             .sort(([a], [b]) => b.length - a.length)
             .forEach(([key, value]) => {
@@ -123,35 +118,32 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
               section = section.replace(regex, value);
             });
 
-          // Seitenumbruch einfügen, wenn nicht letzter Schüler
           if (index < array.length - 1) {
-            // Suche den letzten Absatz und füge den Seitenumbruch dort ein
-            const lastParagraphMatch = section.match(/<w:p[^>]*>(?:(?!<w:p[^>]*>).)*?<\/w:p>(?=[^]*$)/);
-            if (lastParagraphMatch) {
-              const lastParagraph = lastParagraphMatch[0];
-              const modifiedParagraph = lastParagraph.replace(
-                /<\/w:p>$/,
-                '<w:r><w:br w:type="page"/></w:r></w:p>'
-              );
-              section = section.replace(lastParagraphMatch[0], modifiedParagraph);
-            }
+            section += `<w:p>
+              <w:pPr>
+                <w:sectPr>
+                  ${continuousSectPr}
+                </w:sectPr>
+              </w:pPr>
+              <w:r>
+                <w:br w:type="page"/>
+              </w:r>
+            </w:p>`;
           }
 
           return section;
         })
         .join('');
 
-      // Zusammenführen des Dokuments
-      const newXmlContent = `${preBody}${studentSections}${sectPr}${postBody}`;
+      const finalSection = `<w:p><w:pPr>${originalSectPr}</w:pPr></w:p>`;
+      const newXmlContent = `${preBody}${studentSections}${finalSection}${postBody}`;
 
-      // Optional: XML Validierung
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(newXmlContent, "text/xml");
       if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
         throw new Error("Generiertes XML ist fehlerhaft");
       }
 
-      // Dokument speichern
       zip.file(documentXmlPath, newXmlContent);
       const out = zip.generate({
         type: 'blob',
