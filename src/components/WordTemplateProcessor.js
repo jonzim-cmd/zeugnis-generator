@@ -68,7 +68,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
       const arrayBuffer = await response.arrayBuffer();
 
-      // --- ZIP-Struktur: Original-ZIP behalten, um alle Dateien später zu kopieren ---
+      // --- Original- und Arbeitskopie des ZIP-Archivs erstellen ---
       const originalZip = new PizZip(arrayBuffer);
       const zip = new PizZip(arrayBuffer);
 
@@ -79,7 +79,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
       let xmlContent = zip.file(documentXmlPath).asText();
 
-      // --- 1. Verbesserte Lesezeichen-Extraktion ---
+      // --- 1. Lesezeichen für den Studentensektionsbereich ermitteln ---
       const startBookmarkStartRegex = /<w:bookmarkStart[^>]*w:name="STUDENT_SECTION_START"[^>]*>/;
       const startBookmarkEndRegex = /<w:bookmarkEnd[^>]*w:id\s*=\s*"(\d+)"[^>]*>/;
       const endBookmarkStartRegex = /<w:bookmarkStart[^>]*w:name="STUDENT_SECTION_END"[^>]*>/;
@@ -109,7 +109,9 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       const endBookmarkStartIndex =
         startBookmarkEndIndex + endBookmarkStartSlice.indexOf(endBookmarkStartMatch[0]);
 
-      let sectionTemplate = xmlContent.substring(startBookmarkEndIndex, endBookmarkStartIndex)
+      // Entferne alle Lesezeichen im zu ersetzenden Abschnitt
+      let sectionTemplate = xmlContent
+        .substring(startBookmarkEndIndex, endBookmarkStartIndex)
         .replace(/<w:bookmark(Start|End)[^>]*>/g, '');
 
       // --- 2. Platzhalter-Ersetzung für jeden Schüler ---
@@ -121,6 +123,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         const student = excelData[i];
         let studentSection = sectionTemplate;
 
+        // Mapping aus Dashboard-Daten und Excel-Daten
         const mapping = {
           'placeholdersj': escapeXml(dashboardData.schuljahr || ''),
           'placeholdersl': escapeXml(dashboardData.schulleitung || ''),
@@ -130,7 +133,15 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           'placeholderkl': escapeXml(dashboardData.klassenleitung || '')
         };
 
+        // Spezifische Excel-Daten:
+        // Ersetze "placeholderklasse" mit Wert aus Spalte "KL"
+        mapping['placeholderklasse'] = escapeXml(student.KL || '');
+        // Formatierung des Datums "gdat" nach deutschem Format
+        mapping['gdat'] = escapeXml(formatExcelDate(student.gdat) || '');
+
+        // Weitere Excel-Felder einfügen (überspringt dabei bereits definierte Felder)
         Object.entries(student).forEach(([key, value]) => {
+          if (key === 'KL' || key === 'gdat') return;
           let safeValue = escapeXml(value);
           if (safeValue.includes('\u0000')) {
             safeValue = safeValue.replace(/\u0000/g, '');
@@ -138,14 +149,17 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           mapping[key] = safeValue;
         });
 
+        // Zuerst den Excel-Klassenplatzhalter ersetzen
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderklasse'), 'g'),
           mapping['placeholderklasse'] || ''
         );
+        // Dann den Dashboard-Wert für Klassenleitung ersetzen
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderkl'), 'g'),
           mapping['placeholderkl'] || ''
         );
+        // Ersetze alle übrigen Platzhalter
         Object.keys(mapping)
           .filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl')
           .sort((a, b) => b.length - a.length)
@@ -154,6 +168,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
+        // Füge Seitenumbruch zwischen den Schülerabschnitten ein
         const pageBreak = `
           <w:p>
             <w:r>
@@ -201,7 +216,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
         throw new Error("Generiertes XML ist fehlerhaft");
       }
 
-      // --- 6. ZIP-Struktur vervollständigen ---
+      // --- 6. ZIP-Struktur vervollständigen und Dokument ersetzen ---
       Object.keys(originalZip.files).forEach((relativePath) => {
         const file = originalZip.file(relativePath);
         if (!zip.file(relativePath)) {
