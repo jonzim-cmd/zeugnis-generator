@@ -57,9 +57,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
     return `${process.env.PUBLIC_URL}/template_jahr.docx`;
   };
 
-  // Definiere den Seitenumbruch-Run – er verwendet den korrekten Namespace (w:)
-  const pageBreakRun = '<w:r><w:br w:type="page"/></w:r>';
-
   const generateDocx = async () => {
     setProcessing(true);
     try {
@@ -146,16 +143,18 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // Füge inline einen Seitenumbruch ein – genau wie du es im Word-Dokument tun würdest,
-        // indem du den Cursor hinter "Studen End" setzt und dann den Umbruch einfügst.
-        // Suche dazu exakt nach dem <w:t>-Element, das "Studen End" enthält.
-        const markerRegex = /(<w:t[^>]*>Studen End<\/w:t>)/g;
-        if (markerRegex.test(studentSection) && i < excelData.length - 1) {
-          // Füge den Seitenumbruch direkt nach dem geschlossenen <w:t>-Element ein (ohne einen neuen Absatz zu erzeugen)
-          studentSection = studentSection.replace(markerRegex, `$1${pageBreakRun}`);
+        // **Neuer Ansatz: Seitenumbruch als separaten Run in demselben Absatz einfügen.**
+        // Wir suchen den gesamten Absatz (<w:p>...</w:p>), der "Studen End" enthält,
+        // und fügen unmittelbar vor dem schließenden </w:p> einen neuen Run mit dem Seitenumbruch ein.
+        const paragraphRegex = /(<w:p\b[^>]*>[\s\S]*?<w:t[^>]*>Studen End<\/w:t>[\s\S]*?)(<\/w:p>)/g;
+        if (paragraphRegex.test(studentSection) && i < excelData.length - 1) {
+          studentSection = studentSection.replace(
+            paragraphRegex,
+            '$1<w:r><w:br w:type="page"/></w:r>$2'
+          );
         } else if (i < excelData.length - 1) {
-          // Fallback: Sollte der Marker nicht gefunden werden, hänge den Seitenumbruch als eigenen Run an.
-          studentSection += pageBreakRun;
+          // Fallback: Hänge den Seitenumbruch als eigenen Absatz an.
+          studentSection += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
         }
         
         allStudentSections += studentSection;
