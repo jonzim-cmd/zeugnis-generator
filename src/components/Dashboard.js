@@ -1,11 +1,13 @@
 import React, { useContext, useState } from 'react';
 import { Container, Grid, Typography, Paper, Box, Divider } from '@mui/material';
 import { AppContext } from '../context/AppContext';
+import ExcelUpload from './ExcelUpload';
 import TemplateImport from './TemplateImport';
 import WordTemplateProcessor from './WordTemplateProcessor';
 
 const Dashboard = () => {
-  const { dashboardData, setDashboardData } = useContext(AppContext);
+  // Wir nutzen den globalen Context für Dashboard- und Excel-Daten
+  const { dashboardData, setDashboardData, excelData } = useContext(AppContext);
   const [customTemplate, setCustomTemplate] = useState(null);
 
   const handleChange = (e) => {
@@ -31,7 +33,17 @@ const Dashboard = () => {
           Zeugnis Generator
         </Typography>
 
-        {/* Section 1: Zusätzliche Eingaben */}
+        {/* Section 1: Excel Upload (integriert in die Dashboard-Seite) */}
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Excel-Datei hochladen
+          </Typography>
+          <ExcelUpload />
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
+
+        {/* Section 2: Zusätzliche Eingaben */}
         <Box sx={{ mt: 3 }}>
           <Typography variant="h6" gutterBottom>
             Zusätzliche Eingaben
@@ -134,18 +146,17 @@ const Dashboard = () => {
 
         <Divider sx={{ my: 3 }} />
 
-        {/* Section 2: Upload & Generierung */}
+        {/* Section 3: Word-Template Upload & Dokumentgenerierung */}
         <Box sx={{ mt: 3 }}>
           <Typography variant="h6" gutterBottom>
             Word-Template Upload & Dokumentgenerierung
           </Typography>
           <TemplateImport onTemplateLoaded={setCustomTemplate} />
-          <Box sx={{ mt: 2 }}>
-            {/* Hier übergeben wir ein Dummy-Datensatz-Array (eine leeres Objekt) an WordTemplateProcessor */}
+          <Box sx={{ mt: 2, textAlign: 'center' }}>
             <WordTemplateProcessor
               dashboardData={dashboardData}
               customTemplate={customTemplate}
-              excelData={[{ KL: '', gdat: '' }]}
+              excelData={excelData && excelData.length > 0 ? excelData : [{ KL: '', gdat: '' }]}
             />
           </Box>
         </Box>
