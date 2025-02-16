@@ -1,14 +1,17 @@
 import React, { useContext, useState } from 'react';
 import { Container, Grid, Typography, Paper, Box, Divider } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { AppContext } from '../context/AppContext';
 import ExcelUpload from './ExcelUpload';
 import TemplateImport from './TemplateImport';
 import WordTemplateProcessor from './WordTemplateProcessor';
-import { styles } from './dashboardStyles';
+import { getDashboardStyles } from './dashboardStyles';
 
 const Dashboard = () => {
   const { dashboardData, setDashboardData, excelData } = useContext(AppContext);
   const [customTemplate, setCustomTemplate] = useState(null);
+  const theme = useTheme();
+  const styles = getDashboardStyles(theme.palette.mode);
 
   const handleChange = (e) => {
     setDashboardData({ ...dashboardData, [e.target.name]: e.target.value });
