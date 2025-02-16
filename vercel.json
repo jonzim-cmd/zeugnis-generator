@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    {
+      "source": "/zeugnis-generator/:match*",
+      "destination": "/:match*"
+    }
+  ],
+  "outputDirectory": "docs"
+}
