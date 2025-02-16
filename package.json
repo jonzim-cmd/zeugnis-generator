@@ -2,7 +2,7 @@
   "name": "zeugnis-generator",
   "version": "1.0.0",
   "private": true,
-  "homepage": "/",
+  "homepage": "https://jonzim-cmd.github.io/zeugnis-generator",
   "dependencies": {
     "@mui/icons-material": "^5.11.0",
     "@mui/material": "^5.11.0",
