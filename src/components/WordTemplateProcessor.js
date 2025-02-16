@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
 
-// Hilfsfunktionen zum Escapen von Sonderzeichen
+// Escapen von Regex-Sonderzeichen
 const escapeRegExp = (string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
+// Escapen von XML-Sonderzeichen
 const escapeXml = (unsafe) => {
   return unsafe.toString().replace(/[<>&'"]/g, (c) => {
     switch (c) {
@@ -18,6 +19,7 @@ const escapeXml = (unsafe) => {
   });
 };
 
+// Konvertiert Excel-Serial in ein Datum im Format TT.MM.JJJJ
 const formatExcelDate = (dateVal) => {
   if (typeof dateVal === 'number') {
     const utcDays = Math.floor(dateVal - 25569);
@@ -31,6 +33,7 @@ const formatExcelDate = (dateVal) => {
   return dateVal;
 };
 
+// Konvertiert einen ISO-Datum-String in das Format TT.MM.JJJJ
 const formatIsoDate = (isoStr) => {
   if (!isoStr) return '';
   const date = new Date(isoStr);
@@ -38,13 +41,6 @@ const formatIsoDate = (isoStr) => {
   const month = ('0' + (date.getMonth() + 1)).slice(-2);
   const year = date.getFullYear();
   return `${day}.${month}.${year}`;
-};
-
-// Extrahiere den ersten <w:sectPr>-Block aus dem XML (angenommen, es gibt nur einen im Template)
-const extractOriginalSectPr = (xmlContent) => {
-  const sectPrRegex = /<w:sectPr[\s\S]*?<\/w:sectPr>/;
-  const match = xmlContent.match(sectPrRegex);
-  return match ? match[0] : '';
 };
 
 const WordTemplateProcessor = ({ excelData, dashboardData }) => {
@@ -79,7 +75,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
       const xmlContent = zip.file(documentXmlPath).asText();
 
-      // Extrahiere den <w:body>-Bereich als Vorlage
+      // --- Extrahiere den <w:body>-Bereich als Vorlage ---
       const bodyStartTag = '<w:body>';
       const bodyEndTag = '</w:body>';
       const bodyStartIndex = xmlContent.indexOf(bodyStartTag);
@@ -87,21 +83,20 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       if (bodyStartIndex === -1 || bodyEndIndex === -1) {
         throw new Error('Die benötigten <w:body>-Tags wurden nicht gefunden.');
       }
+      // Behalte den Originalheader und alles vor <w:body>
       const preBody = xmlContent.substring(0, bodyStartIndex + bodyStartTag.length);
+      // Und alles nach </w:body> (inklusive </w:document> etc.)
       const postBody = xmlContent.substring(bodyEndIndex);
+      // Extrahiere den Body-Inhalt (das Zeugnis-Template)
       let studentTemplate = xmlContent.substring(bodyStartIndex + bodyStartTag.length, bodyEndIndex).trim();
 
-      // Extrahiere den originalen <w:sectPr>-Block und entferne ihn aus dem Template
-      const originalSectPr = extractOriginalSectPr(studentTemplate);
-      if (originalSectPr) {
-        studentTemplate = studentTemplate.replace(originalSectPr, '');
+      // Entferne gegebenenfalls den <w:sectPr>-Block am Ende, damit er nicht mehrfach eingefügt wird.
+      let sectPr = '';
+      const sectPrIndex = studentTemplate.lastIndexOf('<w:sectPr');
+      if (sectPrIndex !== -1) {
+        sectPr = studentTemplate.substring(sectPrIndex);
+        studentTemplate = studentTemplate.substring(0, sectPrIndex);
       }
-
-      // Erzeuge einen kontinuierlichen Sektionseinstellungsblock, 
-      // indem der w:type auf "continuous" gesetzt wird:
-      const continuousSectPr = originalSectPr
-        ? originalSectPr.replace(/w:type="[^"]*"/, 'w:type="continuous"')
-        : '';
 
       // --- Erzeuge für jeden Schüler einen Abschnitt ---
       let allStudentSections = "";
@@ -110,8 +105,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
       }
       excelData.forEach((student, i) => {
         let studentSection = studentTemplate;
-
-        // Mapping aus Dashboard- und Excel-Daten
+        // Mapping aus Dashboard-Daten und Excel-Daten
         const mapping = {
           'placeholdersj': escapeXml(dashboardData.schuljahr || ''),
           'placeholdersl': escapeXml(dashboardData.schulleitung || ''),
@@ -119,25 +113,28 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           'kltitel': escapeXml(dashboardData.kl_titel || ''),
           'zeugnisdatum': escapeXml(formatIsoDate(dashboardData.datum) || ''),
           'placeholderkl': escapeXml(dashboardData.klassenleitung || ''),
+          // Excel-spezifisch:
           'placeholderklasse': escapeXml(student.KL || ''),
           'gdat': escapeXml(formatExcelDate(student.gdat) || '')
         };
 
+        // Ergänze weitere Excel-Werte, ohne die oben definierten Keys zu überschreiben
         Object.entries(student).forEach(([key, value]) => {
           if (['KL', 'gdat'].includes(key)) return;
           mapping[key] = escapeXml(value);
         });
 
-        // Ersetze zuerst "placeholderklasse" und dann "placeholderkl"
+        // Ersetze zuerst den Excel-Platzhalter "placeholderklasse"
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderklasse'), 'g'),
           mapping['placeholderklasse']
         );
+        // Ersetze danach den Dashboard-Platzhalter "placeholderkl"
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderkl'), 'g'),
           mapping['placeholderkl']
         );
-        // Ersetze alle übrigen Platzhalter (längere zuerst)
+        // Ersetze alle übrigen Platzhalter exakt – längere zuerst
         Object.keys(mapping)
           .filter(key => key !== 'placeholderklasse' && key !== 'placeholderkl')
           .sort((a, b) => b.length - a.length)
@@ -146,38 +143,31 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // Für alle Schüler außer dem letzten: Füge einen Absatz mit kontinuierlichen Sektionseinstellungen und Seitenumbruch ein
-        if (i < excelData.length - 1 && continuousSectPr) {
-          studentSection += `
-            <w:p>
-              <w:pPr>
-                <w:sectPr>
-                  ${continuousSectPr}
-                </w:sectPr>
-              </w:pPr>
-              <w:r>
-                <w:br w:type="page"/>
-              </w:r>
-            </w:p>`;
+        // **Neuer Ansatz: Seitenumbruch als separaten Run in demselben Absatz einfügen.**
+        // Wir suchen den gesamten Absatz (<w:p>...</w:p>), der "Studen End" enthält,
+        // und fügen unmittelbar vor dem schließenden </w:p> einen neuen Run mit dem Seitenumbruch ein.
+        const paragraphRegex = /(<w:p\b[^>]*>[\s\S]*?<w:t[^>]*>Studen End<\/w:t>[\s\S]*?)(<\/w:p>)/g;
+        if (paragraphRegex.test(studentSection) && i < excelData.length - 1) {
+          studentSection = studentSection.replace(
+            paragraphRegex,
+            '$1<w:r><w:br w:type="page"/></w:r>$2'
+          );
+        } else if (i < excelData.length - 1) {
+          // Fallback: Hänge den Seitenumbruch als eigenen Absatz an.
+          studentSection += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
         }
         
         allStudentSections += studentSection;
       });
 
-      // Am Ende des Dokuments: Hänge den finalen Absatz mit den originalen Sektionseinstellungen an
-      const finalSection = originalSectPr
-        ? `<w:p>
-             <w:pPr>
-               ${originalSectPr}
-             </w:pPr>
-           </w:p>`
-        : '';
-      const newBodyContent = allStudentSections + finalSection;
+      // Hänge zum Ende der zusammengesetzten Schülerabschnitte einmalig den <w:sectPr>-Block an,
+      // damit die Sektionseinstellungen erhalten bleiben.
+      const newBodyContent = allStudentSections + sectPr;
 
       // Füge den neuen Body wieder in das komplette Dokument ein
       const newXmlContent = preBody + newBodyContent + postBody;
 
-      // (Optional) Überprüfe die XML-Struktur
+      // (Optional) Überprüfung der XML-Struktur – nur zur Diagnose
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(newXmlContent, "text/xml");
       if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
