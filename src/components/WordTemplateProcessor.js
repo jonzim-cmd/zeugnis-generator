@@ -144,14 +144,13 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
           });
 
         // **Neuer Feinschliff:** Seitenumbruch direkt nach der Textmarke "Studen End" einfügen.
+        // Hier wird der Seitenumbruch inline (ohne eigenen Absatz) eingefügt.
         const marker = "Studen End";
-        const pageBreak = `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+        const inlinePageBreak = `<w:r><w:br w:type="page"/></w:r>`;
         if (studentSection.indexOf(marker) !== -1) {
-          // Füge den Seitenumbruch direkt nach dem Marker ein
-          studentSection = studentSection.replace(marker, marker + pageBreak);
+          studentSection = studentSection.replace(marker, marker + inlinePageBreak);
         } else if (i < excelData.length - 1) {
-          // Fallback: falls der Marker nicht gefunden wird, hänge den Seitenumbruch an
-          studentSection += pageBreak;
+          studentSection += inlinePageBreak;
         }
         
         allStudentSections += studentSection;
