@@ -1,15 +1,23 @@
-import React, { useContext } from 'react';
-import { TextField, MenuItem, Grid, Typography } from '@mui/material';
+import React, { useContext, useState } from 'react';
+import { Container, Grid, Typography, Paper, Box, Divider } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { AppContext } from '../context/AppContext';
+import ExcelUpload from './ExcelUpload';
+import TemplateImport from './TemplateImport';
+import WordTemplateProcessor from './WordTemplateProcessor';
+import { getDashboardStyles } from './dashboardStyles';
 
 const Dashboard = () => {
-  const { dashboardData, setDashboardData } = useContext(AppContext);
+  const { dashboardData, setDashboardData, excelData } = useContext(AppContext);
+  const [customTemplate, setCustomTemplate] = useState(null);
+  const theme = useTheme();
+  const styles = getDashboardStyles(theme.palette.mode);
 
   const handleChange = (e) => {
     setDashboardData({ ...dashboardData, [e.target.name]: e.target.value });
   };
 
-  // Dropdown-Optionen für Funktionsbezeichnungen
+  // Optionen für Funktionsbezeichnungen
   const funktionsOptions = [
     'StR',
     'StRin',
@@ -22,97 +30,152 @@ const Dashboard = () => {
   ];
 
   return (
-    <div>
-      <Typography variant="h6" gutterBottom>
-        Zusätzliche Eingaben
-      </Typography>
-      <Grid container spacing={2}>
-        <Grid item xs={12} sm={6}>
-          <TextField
-            label="Klassenleitung"
-            name="klassenleitung"
-            value={dashboardData.klassenleitung}
-            onChange={handleChange}
-            fullWidth
+    <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
+      <Paper elevation={3} sx={{ p: 3 }}>
+        <Typography 
+          variant="h4" 
+          align="center" 
+          gutterBottom 
+          sx={styles.header}>
+          Zeugnisgenerator
+        </Typography>
+
+        {/* Section: Excel Upload */}
+        <Box sx={styles.excelUpload}>
+          <Typography variant="h6" gutterBottom>
+            Excel-Datei hochladen
+          </Typography>
+          <ExcelUpload />
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
+
+        {/* Section: Dashboard Eingaben */}
+        <Box sx={styles.dashboardInputs}>
+          <Typography variant="h6" gutterBottom>
+            Dashboard Eingaben
+          </Typography>
+          <Grid container spacing={2}>
+            {/* Klassenleitung & Funktionsbezeichnung Klassenleitung */}
+            <Grid item xs={12} sm={6}>
+              <Typography variant="subtitle1">Klassenleitung</Typography>
+              <input
+                type="text"
+                name="klassenleitung"
+                value={dashboardData.klassenleitung || ''}
+                onChange={handleChange}
+                placeholder="Klassenleitung"
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Typography variant="subtitle1">Funktionsbezeichnung Klassenleitung</Typography>
+              <select
+                name="kl_titel"
+                value={dashboardData.kl_titel || ''}
+                onChange={handleChange}
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              >
+                <option value="">Bitte wählen</option>
+                {funktionsOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </Grid>
+            {/* Schulleitung & Funktionsbezeichnung Schulleitung */}
+            <Grid item xs={12} sm={6}>
+              <Typography variant="subtitle1">Schulleitung</Typography>
+              <input
+                type="text"
+                name="schulleitung"
+                value={dashboardData.schulleitung || ''}
+                onChange={handleChange}
+                placeholder="Schulleitung"
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Typography variant="subtitle1">Funktionsbezeichnung Schulleitung</Typography>
+              <select
+                name="sl_titel"
+                value={dashboardData.sl_titel || ''}
+                onChange={handleChange}
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              >
+                <option value="">Bitte wählen</option>
+                {funktionsOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </Grid>
+            {/* Weitere Felder */}
+            <Grid item xs={12} sm={6}>
+              <Typography variant="subtitle1">Schuljahr</Typography>
+              <input
+                type="text"
+                name="schuljahr"
+                value={dashboardData.schuljahr || ''}
+                onChange={handleChange}
+                placeholder="Schuljahr"
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Typography variant="subtitle1">Zeugnisdatum</Typography>
+              <input
+                type="date"
+                name="datum"
+                value={dashboardData.datum || ''}
+                onChange={handleChange}
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="subtitle1">Zeugnisart</Typography>
+              <select
+                name="zeugnisart"
+                value={dashboardData.zeugnisart || ''}
+                onChange={handleChange}
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              >
+                <option value="">Bitte wählen</option>
+                <option value="Zwischenzeugnis">Zwischenzeugnis</option>
+                <option value="Jahreszeugnis">Jahreszeugnis</option>
+                <option value="Abschlusszeugnis">Abschlusszeugnis</option>
+              </select>
+            </Grid>
+          </Grid>
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
+
+        {/* Section: Word-Template Upload */}
+        <Box sx={styles.templateUpload}>
+          <Typography variant="h6" gutterBottom>
+            Word-Template Upload
+          </Typography>
+          <TemplateImport onTemplateLoaded={setCustomTemplate} />
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
+
+        {/* Section: Dokumentgenerierung */}
+        <Box sx={styles.documentGeneration}>
+          <Typography variant="h6" gutterBottom>
+            Dokumentgenerierung
+          </Typography>
+          <WordTemplateProcessor
+            dashboardData={dashboardData}
+            customTemplate={customTemplate}
+            excelData={excelData && excelData.length > 0 ? excelData : [{ KL: '', gdat: '' }]}
           />
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <TextField
-            label="Schulleitung"
-            name="schulleitung"
-            value={dashboardData.schulleitung}
-            onChange={handleChange}
-            fullWidth
-          />
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <TextField
-            select
-            label="Funktionsbezeichnung Schulleitung"
-            name="sl_titel"
-            value={dashboardData.sl_titel}
-            onChange={handleChange}
-            fullWidth
-          >
-            {funktionsOptions.map((option) => (
-              <MenuItem key={option} value={option}>
-                {option}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <TextField
-            select
-            label="Funktionsbezeichnung Klassenleitung"
-            name="kl_titel"
-            value={dashboardData.kl_titel}
-            onChange={handleChange}
-            fullWidth
-          >
-            {funktionsOptions.map((option) => (
-              <MenuItem key={option} value={option}>
-                {option}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <TextField
-            label="Schuljahr"
-            name="schuljahr"
-            value={dashboardData.schuljahr}
-            onChange={handleChange}
-            fullWidth
-          />
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <TextField
-            label="Zeugnisdatum"
-            name="datum"
-            type="date"
-            value={dashboardData.datum}
-            onChange={handleChange}
-            InputLabelProps={{ shrink: true }}
-            fullWidth
-          />
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <TextField
-            select
-            label="Zeugnisart"
-            name="zeugnisart"
-            value={dashboardData.zeugnisart}
-            onChange={handleChange}
-            fullWidth
-          >
-            <MenuItem value="Zwischenzeugnis">Zwischenzeugnis</MenuItem>
-            <MenuItem value="Jahreszeugnis">Jahreszeugnis</MenuItem>
-            <MenuItem value="Abschlusszeugnis">Abschlusszeugnis</MenuItem>
-          </TextField>
-        </Grid>
-      </Grid>
-    </div>
+        </Box>
+      </Paper>
+    </Container>
   );
 };
 

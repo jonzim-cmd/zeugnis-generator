@@ -30,8 +30,6 @@ const ExcelUpload = () => {
         setDashboardData(prev => ({
           ...prev,
           zeugnisart: zeugnisartMapping[jsonData[0].Zeugnisart] || 'Jahreszeugnis'
-          // WICHTIG: Wir entfernen hier das Setzen von dashboardData.KL,
-          // damit die manuelle Eingabe im Dashboard (dashboardData.klassenleitung) nicht überschrieben wird.
         }));
       }
     };
@@ -40,14 +38,11 @@ const ExcelUpload = () => {
 
   return (
     <div>
-      <Typography variant="h6" gutterBottom>
-        Excel-Datei hochladen
-      </Typography>
       <input
         type="file"
         accept=".xlsx, .xls"
         onChange={handleFileUpload}
-        style={{ marginBottom: '20px' }}
+        style={{ marginBottom: '10px' }}
       />
       <Typography variant="body2" color="textSecondary">
         Bitte stellen Sie sicher, dass die Excel-Datei die korrekten Spalten gemäß der Vorlage enthält.

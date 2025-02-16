@@ -43,10 +43,10 @@ const formatIsoDate = (isoStr) => {
   return `${day}.${month}.${year}`;
 };
 
-const WordTemplateProcessor = ({ excelData, dashboardData }) => {
+const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => {
   const [processing, setProcessing] = useState(false);
 
-  // Bestimme anhand der Zeugnisart das Template
+  // Bestimme anhand der Zeugnisart das Standard-Template
   const getTemplateFileName = () => {
     const art = dashboardData.zeugnisart || '';
     if (art === 'Zwischenzeugnis') {
@@ -60,12 +60,19 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
   const generateDocx = async () => {
     setProcessing(true);
     try {
-      const templateFile = getTemplateFileName();
-      const response = await fetch(templateFile);
-      if (!response.ok) {
-        throw new Error(`Template nicht gefunden: ${templateFile}`);
+      let arrayBuffer;
+      if (customTemplate) {
+        // Verwende das hochgeladene Template
+        arrayBuffer = customTemplate;
+      } else {
+        // Verwende das Standard-Template aus dem Public-Ordner
+        const templateFile = getTemplateFileName();
+        const response = await fetch(templateFile);
+        if (!response.ok) {
+          throw new Error(`Template nicht gefunden: ${templateFile}`);
+        }
+        arrayBuffer = await response.arrayBuffer();
       }
-      const arrayBuffer = await response.arrayBuffer();
 
       // Lade das DOCX (ZIP-Archiv)
       const zip = new PizZip(arrayBuffer);
@@ -143,9 +150,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // **Neuer Ansatz: Abschnittswechsel einfügen statt Seitenumbruch.**
-        // Wir suchen den gesamten Absatz (<w:p>...</w:p>), der "Studen End" enthält,
-        // und fügen unmittelbar nach dem Absatz einen neuen Absatz mit dem <w:sectPr>-Block ein.
+        // **Abschnittswechsel einfügen statt Seitenumbruch:**
         const sectionBreak = `<w:p><w:pPr>${sectPr}</w:pPr></w:p>`;
         const paragraphRegex = /(<w:p\b[^>]*>[\s\S]*?<w:t[^>]*>Studen End<\/w:t>[\s\S]*?)(<\/w:p>)/g;
         if (paragraphRegex.test(studentSection) && i < excelData.length - 1) {
@@ -192,7 +197,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData }) => {
   };
 
   return (
-    <div>
+    <div style={{ textAlign: 'center' }}>
       <button onClick={generateDocx} disabled={processing}>
         {processing ? 'Generiere...' : 'Word-Dokument erstellen'}
       </button>
