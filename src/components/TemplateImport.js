@@ -18,7 +18,7 @@ const TemplateImport = ({ onTemplateLoaded }) => {
 
   return (
     <div style={{ marginTop: '1rem' }}>
-      <label htmlFor="template-upload">Template hochladen:</label>
+      <label htmlFor="template-upload">Word-Template hochladen:</label>
       <input
         id="template-upload"
         type="file"
