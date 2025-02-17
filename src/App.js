@@ -1,5 +1,6 @@
+// src/App.js
 import React from 'react';
-import Dashboard from './components/Dashboard';
+import ProtectedDashboard from './components/ProtectedDashboard';
 import { AppProvider } from './context/AppContext';
 import { ThemeProvider } from '@mui/material/styles';
 import { darkTheme } from './theme';
@@ -12,7 +13,8 @@ function App() {
       <ThemeProvider theme={darkTheme}>
         {/* CssBaseline setzt die globalen Styles für Dark Mode */}
         <CssBaseline />
-        <Dashboard />
+        {/* ProtectedDashboard schützt das gesamte Dashboard */}
+        <ProtectedDashboard />
       </ThemeProvider>
     </AppProvider>
   );
