@@ -9,7 +9,9 @@ const ProtectedDashboard = (props) => {
   const [lockoutUntil, setLockoutUntil] = useState(null);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(true);
 
-  const handlePasswordSubmit = async () => {
+  const handlePasswordSubmit = async (e) => {
+    // Falls das Formular abgeschickt wird, verhindern wir das Standardverhalten.
+    e.preventDefault();
     if (lockoutUntil && Date.now() < lockoutUntil) {
       alert("Zu viele Fehlversuche. Bitte warte, bis die Sperrzeit abgelaufen ist.");
       return;
@@ -42,17 +44,20 @@ const ProtectedDashboard = (props) => {
   if (!authenticated) {
     return (
       <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-        <div style={{ border: '1px solid #ccc', padding: '1rem', display: 'inline-block' }}>
+        <form 
+          onSubmit={handlePasswordSubmit} 
+          style={{ border: '1px solid #ccc', padding: '1rem', display: 'inline-block' }}
+        >
           <label>Bitte gib das Passwort ein:</label>
           <br />
           <input 
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            type="password" 
+            value={password} 
+            onChange={(e) => setPassword(e.target.value)} 
             style={{ marginTop: '0.5rem' }}
           />
           <br />
-          <button onClick={handlePasswordSubmit} style={{ marginTop: '0.5rem' }}>
+          <button type="submit" style={{ marginTop: '0.5rem' }}>
             Absenden
           </button>
           {attempts > 0 && <p>Fehlversuche: {attempts} von 5</p>}
@@ -61,7 +66,7 @@ const ProtectedDashboard = (props) => {
               Sperre aktiv. Bitte warte bis {new Date(lockoutUntil).toLocaleTimeString()}.
             </p>
           )}
-        </div>
+        </form>
       </div>
     );
   }
