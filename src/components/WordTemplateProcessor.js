@@ -46,16 +46,15 @@ const formatIsoDate = (isoStr) => {
 const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => {
   const [processing, setProcessing] = useState(false);
 
-  // Bestimme anhand der Zeugnisart das Standard-Template
-  // Angepasst: Nun wird das Template aus dem privaten Submodule-Verzeichnis "private-templates" geladen.
+  // Angepasst: Bestimme anhand der Zeugnisart das Template aus dem privaten Submodul-Ordner.
   const getTemplateFileName = () => {
     const art = dashboardData.zeugnisart || '';
     if (art === 'Zwischenzeugnis') {
-      return `private-templates/template_zwischen.docx`;
+      return `${process.env.PUBLIC_URL}/private-templates/template_zwischen.docx`;
     } else if (art === 'Abschlusszeugnis') {
-      return `private-templates/template_abschluss.docx`;
+      return `${process.env.PUBLIC_URL}/private-templates/template_abschluss.docx`;
     }
-    return `private-templates/template_jahr.docx`;
+    return `${process.env.PUBLIC_URL}/private-templates/template_jahr.docx`;
   };
 
   const generateDocx = async () => {
@@ -66,7 +65,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => 
         // Verwende das hochgeladene Template
         arrayBuffer = customTemplate;
       } else {
-        // Verwende das Standard-Template aus dem privaten Submodule-Ordner
+        // Verwende das Standard-Template aus dem privaten Submodul-Ordner
         const templateFile = getTemplateFileName();
         const response = await fetch(templateFile);
         if (!response.ok) {
