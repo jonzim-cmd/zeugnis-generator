@@ -46,7 +46,14 @@ const formatIsoDate = (isoStr) => {
 const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => {
   const [processing, setProcessing] = useState(false);
 
-  // Angepasst: Bestimme anhand der Zeugnisart das Template aus dem privaten Submodul-Ordner.
+  // Neue States für Passwort-Validierung
+  const [authenticated, setAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState(null);
+
+  // Bestehende Funktion zur Template-Auswahl (unverändert)
   const getTemplateFileName = () => {
     const art = dashboardData.zeugnisart || '';
     if (art === 'Zwischenzeugnis') {
@@ -57,6 +64,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => 
     return `${process.env.PUBLIC_URL}/private-templates/template_jahr.docx`;
   };
 
+  // Die ursprüngliche generateDocx()-Funktion bleibt unverändert
   const generateDocx = async () => {
     setProcessing(true);
     try {
@@ -195,11 +203,87 @@ const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => 
     }
   };
 
+  // Handler für den Klick auf den Button
+  const handleClick = () => {
+    // Prüfe, ob aktuell eine Sperre aktiv ist
+    if (lockoutUntil && Date.now() < lockoutUntil) {
+      alert("Zu viele Fehlversuche. Bitte warte, bis die Sperrzeit abgelaufen ist.");
+      return;
+    }
+    // Wenn noch nicht authentifiziert, Passwortabfrage anzeigen
+    if (!authenticated) {
+      setShowPasswordPrompt(true);
+    } else {
+      generateDocx();
+    }
+  };
+
+  // Handler, wenn das Passwort abgeschickt wird
+  const handlePasswordSubmit = async () => {
+    // Falls eine Sperrzeit aktiv ist, brechen wir ab
+    if (lockoutUntil && Date.now() < lockoutUntil) {
+      alert("Zu viele Fehlversuche. Bitte warte, bis die Sperrzeit abgelaufen ist.");
+      return;
+    }
+    try {
+      const res = await fetch('/api/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      if (res.ok) {
+        // Passwort ist korrekt
+        setAuthenticated(true);
+        setShowPasswordPrompt(false);
+        // Starte die Dokumentgenerierung
+        generateDocx();
+      } else {
+        // Passwort ist falsch
+        const newAttempts = attempts + 1;
+        setAttempts(newAttempts);
+        if (newAttempts >= 5) {
+          // Sperrzeit von 60 Minuten (60 * 60 * 1000 ms)
+          const lockUntil = Date.now() + 60 * 60 * 1000;
+          setLockoutUntil(lockUntil);
+          alert("Zu viele Fehlversuche. Du bist für 60 Minuten gesperrt.");
+        } else {
+          alert(`Falsches Passwort. Versuch ${newAttempts} von 5.`);
+        }
+      }
+    } catch (error) {
+      console.error("Fehler bei der Passwortüberprüfung:", error);
+      alert("Fehler bei der Passwortüberprüfung.");
+    }
+  };
+
   return (
     <div style={{ textAlign: 'center' }}>
-      <button onClick={generateDocx} disabled={processing}>
+      {/* Button, der je nach Authentifizierung entweder die Passwortabfrage triggert oder direkt das Dokument generiert */}
+      <button onClick={handleClick} disabled={processing}>
         {processing ? 'Generiere...' : 'Word-Dokument erstellen'}
       </button>
+
+      {/* Passwort-Prompt anzeigen, wenn showPasswordPrompt true ist */}
+      {showPasswordPrompt && (
+        <div style={{ marginTop: '1rem', border: '1px solid #ccc', padding: '1rem', display: 'inline-block' }}>
+          <label>Bitte gib das Passwort ein:</label>
+          <br />
+          <input 
+            type="password" 
+            value={password} 
+            onChange={(e) => setPassword(e.target.value)} 
+            style={{ marginTop: '0.5rem' }}
+          />
+          <br />
+          <button onClick={handlePasswordSubmit} style={{ marginTop: '0.5rem' }}>
+            Absenden
+          </button>
+          {attempts > 0 && <p>Fehlversuche: {attempts} von 5</p>}
+          {lockoutUntil && Date.now() < lockoutUntil && (
+            <p style={{ color: 'red' }}>Sperre aktiv. Bitte warte bis {new Date(lockoutUntil).toLocaleTimeString()}.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 };
