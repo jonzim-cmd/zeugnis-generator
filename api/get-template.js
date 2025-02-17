@@ -2,6 +2,9 @@
 import fetch from 'node-fetch';
 
 export default async function handler(req, res) {
+  // Dynamischer Import von node-fetch
+  const { default: fetch } = await import('node-fetch');
+
   // Hole den Token und den Username aus den Environment-Variablen
   const token = process.env.GITHUB_TOKEN;
   const username = process.env.GITHUB_USERNAME;
