@@ -7,14 +7,19 @@ import { saveAs } from 'file-saver';
 const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Escapen von XML-Sonderzeichen
-const escapeXml = (unsafe) => unsafe.toString().replace(/[<>&'"]/g, (c) => {
-  switch (c) {
-    case '<': return '&lt;';
-    case '>': return '&gt;';
-    case '&': return '&amp;';
-    default: return c;
-  }
-});
+const escapeXml = (unsafe) =>
+  unsafe.toString().replace(/[<>&'"]/g, (c) => {
+    switch (c) {
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '&':
+        return '&amp;';
+      default:
+        return c;
+    }
+  });
 
 // Konvertiert Excel-Serial in ein Datum im Format TT.MM.JJJJ
 const formatExcelDate = (dateVal) => {
@@ -43,29 +48,20 @@ const formatIsoDate = (isoStr) => {
 const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => {
   const [processing, setProcessing] = useState(false);
 
-  // Bestimme anhand der Zeugnisart das Template aus dem privaten Submodul-Ordner.
-  const getTemplateFileName = () => {
-    const art = dashboardData.zeugnisart || '';
-    if (art === 'Zwischenzeugnis') {
-      return `${process.env.PUBLIC_URL}/private-templates/template_zwischen.docx`;
-    } else if (art === 'Abschlusszeugnis') {
-      return `${process.env.PUBLIC_URL}/private-templates/template_abschluss.docx`;
-    }
-    return `${process.env.PUBLIC_URL}/private-templates/template_jahr.docx`;
-  };
-
   const generateDocx = async () => {
     setProcessing(true);
     try {
       let arrayBuffer;
       if (customTemplate) {
-        // Verwende das hochgeladene Template
         arrayBuffer = customTemplate;
       } else {
-        // Template über den API-Endpoint laden
-        const response = await fetch('/api/get-template');
+        // Lese den Wert aus dashboardData.zeugnisart, Standard: "Jahreszeugnis"
+        const zeugnisart = dashboardData.zeugnisart || 'Jahreszeugnis';
+        const response = await fetch(
+          `/api/get-template?zeugnisart=${encodeURIComponent(zeugnisart)}`
+        );
         if (!response.ok) {
-          throw new Error(`Template nicht gefunden`);
+          throw new Error(`Template nicht gefunden: ${zeugnisart}`);
         }
         arrayBuffer = await response.arrayBuffer();
       }
@@ -105,7 +101,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => 
       }
       excelData.forEach((student, i) => {
         let studentSection = studentTemplate;
-        // Mapping aus Dashboard-Daten und Excel-Daten
         const mapping = {
           'placeholdersj': escapeXml(dashboardData.schuljahr || ''),
           'placeholdersl': escapeXml(dashboardData.schulleitung || ''),
@@ -122,7 +117,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => 
           mapping[key] = escapeXml(value);
         });
 
-        // Ersetze Platzhalter
         studentSection = studentSection.replace(
           new RegExp(escapeRegExp('placeholderklasse'), 'g'),
           mapping['placeholderklasse']
@@ -139,7 +133,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => 
             studentSection = studentSection.replace(regex, mapping[key]);
           });
 
-        // Abschnittswechsel einfügen
         const sectionBreak = `<w:p><w:pPr>${sectPr}</w:pPr></w:p>`;
         const paragraphRegex = /(<w:p\b[^>]*>[\s\S]*?<w:t[^>]*>Studen End<\/w:t>[\s\S]*?)(<\/w:p>)/g;
         if (paragraphRegex.test(studentSection) && i < excelData.length - 1) {
@@ -156,8 +149,7 @@ const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => 
 
       const newBodyContent = allStudentSections + sectPr;
       const newXmlContent = preBody + newBodyContent + postBody;
-      
-      // Optionale Überprüfung der XML-Struktur
+
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(newXmlContent, "text/xml");
       if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
@@ -165,7 +157,6 @@ const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => 
         throw new Error("Generiertes XML ist fehlerhaft");
       }
 
-      // Überschreibe document.xml im ZIP und speichere das fertige Dokument
       zip.file(documentXmlPath, newXmlContent);
       const out = zip.generate({
         type: 'blob',
