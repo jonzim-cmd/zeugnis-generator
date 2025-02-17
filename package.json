@@ -18,7 +18,7 @@
     "gh-pages": "^5.0.0"
   },
   "scripts": {
-    "prebuild": "./update_submodules.sh && git submodule update --init --recursive",
+    "prebuild": "chmod +x update_submodules.sh && ./update_submodules.sh && git submodule update --init --recursive",
     "build": "react-scripts build",
     "start": "react-scripts start",
     "postbuild": "rm -rf docs && mkdir -p docs && cp -r build/* docs/ && touch docs/.nojekyll",
