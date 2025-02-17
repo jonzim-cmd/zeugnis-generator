@@ -18,8 +18,8 @@
     "gh-pages": "^5.0.0"
   },
   "scripts": {
-    "prebuild": "mkdir -p ~/.ssh && echo \"$SSH_PRIVATE_KEY\" > ~/.ssh/id_ed25519 && echo \"$SSH_PRIVATE_KEY_TEMPLATE\" > ~/.ssh/id_ed25519_template && chmod 600 ~/.ssh/id_ed25519 ~/.ssh/id_ed25519_template && printf \"Host github.com\\n    StrictHostKeyChecking no\\n\\nHost github.com-zeugnis\\n    HostName github.com\\n    User git\\n    IdentityFile ~/.ssh/id_ed25519\\n\\nHost github.com-template\\n    HostName github.com\\n    User git\\n    IdentityFile ~/.ssh/id_ed25519_template\" > ~/.ssh/config && ls -la ~/.ssh && git submodule update --init --recursive",
-    "build": "GIT_SSH_COMMAND='ssh -F ~/.ssh/config' react-scripts build",
+    "prebuild": "./update_submodules.sh && git submodule update --init --recursive",
+    "build": "react-scripts build",
     "start": "react-scripts start",
     "postbuild": "rm -rf docs && mkdir -p docs && cp -r build/* docs/ && touch docs/.nojekyll",
     "deploy": "git stash push --include-untracked || true && npm run build && git add docs && git commit -m \"Update docs folder\" && git pull --rebase --autostash && git push && git stash pop || true"
