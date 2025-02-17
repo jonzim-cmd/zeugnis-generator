@@ -65,11 +65,10 @@ const WordTemplateProcessor = ({ excelData, dashboardData, customTemplate }) => 
         // Verwende das hochgeladene Template
         arrayBuffer = customTemplate;
       } else {
-        // Verwende das Standard-Template aus dem privaten Submodul-Ordner
-        const templateFile = getTemplateFileName();
-        const response = await fetch(templateFile);
+        // Statt des direkten Aufrufs des privaten Templates wird jetzt der API-Endpoint aufgerufen:
+        const response = await fetch('/api/get-template');
         if (!response.ok) {
-          throw new Error(`Template nicht gefunden: ${templateFile}`);
+          throw new Error(`Template nicht gefunden`);
         }
         arrayBuffer = await response.arrayBuffer();
       }
