@@ -21,7 +21,7 @@
     "prebuild": "chmod +x update_submodules.sh && ./update_submodules.sh && git submodule update --init --recursive",
     "build": "react-scripts build",
     "start": "react-scripts start",
-    "postbuild": "rm -rf docs && mkdir -p docs && cp -r build/* docs/ && touch docs/.nojekyll",
+    "postbuild": "rm -rf docs && mkdir -p docs && cp -r build/* docs/ && cp -r private-templates build/private-templates && touch docs/.nojekyll",
     "deploy": "git stash push --include-untracked || true && npm run build && git add docs && git commit -m \"Update docs folder\" && git pull --rebase --autostash && git push && git stash pop || true"
   },
   "browserslist": {
