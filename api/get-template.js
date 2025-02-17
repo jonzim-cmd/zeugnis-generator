@@ -1,5 +1,4 @@
 // api/get-template.js
-import fetch from 'node-fetch';
 
 export default async function handler(req, res) {
   // Dynamischer Import von node-fetch
